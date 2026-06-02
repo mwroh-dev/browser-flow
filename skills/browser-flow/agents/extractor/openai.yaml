@@ -1,0 +1,21 @@
+# Task 3 private owner boundary: first-class owner for extraction playbooks.
+name: extractor
+role_type: phase
+description: Specialist agent for the optional extract phase. Owns post-verify extraction setup and extraction-heal private playbooks.
+phase: extract
+inputs:
+  - artifacts/runs/<run-id>/snapshots-manifest.json
+  - artifacts/runs/<run-id>/snapshots/*.html.gz
+  - artifacts/runs/<run-id>/scrape-request.json
+  - artifacts/runs/<run-id>/extract-heal-request.json
+outputs:
+  - artifacts/runs/<run-id>/scrape-result.json
+  - artifacts/runs/<run-id>/extract-result.json
+  - artifacts/runs/<run-id>/extract-heal-result.json
+  - knowledge/scraping/<pageKey>/config.json
+  - knowledge/scraping/<pageKey>/golden.json
+guardrails:
+  - Read sanitized DOM snapshots only.
+  - Do not mutate core action workflow artifacts.
+  - Keep scraping knowledge separate from page-node structure knowledge.
+  - Do not fabricate rows or schema fields.
