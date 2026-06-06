@@ -6,6 +6,34 @@ project: what problem surfaced, what changed, and what capability or release
 posture improved as a result.
 
 <!-- browser-flow-history:start -->
+## Work Item: verification-quality-fixes - Verification quality fixes
+
+- Status: resolved
+- First recorded: 2026-06-06T15:58:33.060Z
+- Last updated: 2026-06-06T19:18:12.876Z
+
+### User Request
+Fix installed CLI E2E verification-quality issues where generated CDP runtime IDs blocked security promotion and final DOM evidence could select weak static text or action-label text.
+
+### Why It Mattered
+Verification could replay correctly while final promotion was blocked by known generated CDP metadata being misclassified as secrets, or by DOM evidence that did not prove the goal-specific final state.
+
+### Model Conclusion
+The release should keep strict artifact scanning, classify only known CDP opaque runtime metadata as non-blocking audit findings, and prefer bounded final-state DOM evidence over generic headings, broad containers, or short action labels.
+
+### Changes Made
+Updated the released security scanner to inspect structured high-entropy values, preserve JavaScript literal scanning, narrowly classify known CDP frame/target IDs as non-blocking runtime metadata, and harden generated-source filtering. Updated page evidence collection and analyzer priority scoring to prefer semantic final-state regions, support common plural labels such as details/results/receipts/totals, filter invisible or non-semantic candidates, avoid unnecessary layout reads, and demote weak action-label evidence.
+
+### Expected Resolution
+Installed browser-flow CLI verification can promote valid replay runs without false blocking on known CDP runtime IDs, while final DOM evidence is anchored on meaningful final-state content such as detail, result, status, receipt, price, or total regions.
+
+### Validation
+Ran focused security scanner, page-evidence, analyzer, observe, and locator regression tests; ran lint and release audit; ran project-local install smoke; and verified the installed CLI E2E workflow with two consecutive verify passes.
+
+### Publication Notes
+This release sync contains the verification-quality fixes only. Review follow-up fixes are folded into the final release state rather than recorded as separate public history entries.
+
+
 ## Work Item: public-sync-state - Public sync state
 
 - Status: resolved

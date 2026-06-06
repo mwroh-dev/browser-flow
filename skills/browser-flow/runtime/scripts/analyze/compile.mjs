@@ -782,9 +782,69 @@ export function compileRun(runId) {
  * @param {Array<{ selector?: string, text?: string, url?: string }>} entries
  */
 function pickPreferredEvidence(entries) {
-  return entries.find((entry) => entry.selector?.startsWith("[data-bf-evidence")) ??
-    entries.find((entry) => entry.selector?.includes("status")) ??
-    entries[0];
+  return entries
+    .map((entry, index) => ({ entry, index, score: evidencePriority(entry) }))
+    .sort((a, b) => a.score - b.score || a.index - b.index)
+    .at(0)?.entry;
+}
+
+/**
+ * @param {{ selector?: string, text?: string, url?: string }} entry
+ */
+function evidencePriority(entry) {
+  const selector = String(entry.selector || "").trim();
+  const lowerSelector = selector.toLowerCase();
+  const lowerText = String(entry.text || "").toLowerCase();
+  const actionLabel = isLikelyActionLabelEvidence(lowerText);
+  if (lowerSelector.startsWith("[data-bf-evidence")) return 0;
+  if (/\[role=['"]?status['"]?\]/i.test(selector) || /\brole=status\b/i.test(selector)) return 10;
+  if (/\[aria-live(?:=|\])/i.test(selector)) return 20;
+  if (/^h[1-6]$/i.test(selector)) {
+    return !actionLabel && isFinalStateHeadingEvidence(lowerText) ? 30 : 80;
+  }
+  if (!actionLabel && isFinalStateRegionEvidence(lowerSelector, lowerText)) return 30;
+  if (!actionLabel && isBoundedEvidenceSelector(selector)) return 50;
+  if (actionLabel) return 85;
+  if (/^(body|main|section|article)$/i.test(selector)) return 90;
+  return 70;
+}
+
+/**
+ * @param {string} lowerText
+ */
+function isLikelyActionLabelEvidence(lowerText) {
+  const text = lowerText.replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  const words = text.split(" ");
+  if (words.length > 4) return false;
+  return /^(view|search|submit|save|continue|next|previous|back|open|close|show|hide|select|choose|filter|sort|apply|clear|cancel|confirm|create|edit|delete|remove|add|download|upload|send|run|start|launch|sign|log|login|logout|signin|signout|signup|checkout|buy|pay)\b/.test(text);
+}
+
+/**
+ * @param {string} lowerSelector
+ * @param {string} lowerText
+ */
+function isFinalStateRegionEvidence(lowerSelector, lowerText) {
+  const haystack = `${lowerSelector} ${lowerText}`;
+  return /\b(details?|results?|status|summaries|summary|confirmations?|confirmed|complete|success|receipts?|prices?|costs?|totals?|messages?|outputs?)\b/.test(haystack);
+}
+
+/**
+ * @param {string} lowerText
+ */
+function isFinalStateHeadingEvidence(lowerText) {
+  return /\b(confirmations?|confirmed|complete|success|receipts?|totals?)\b/.test(lowerText);
+}
+
+/**
+ * @param {string} selector
+ */
+function isBoundedEvidenceSelector(selector) {
+  const trimmed = selector.trim();
+  if (!trimmed || isGenericEvidenceSelector(trimmed)) return false;
+  return /^#[A-Za-z][\w-]*$/.test(trimmed) ||
+    /^\.[A-Za-z][\w-]*$/.test(trimmed) ||
+    /^\[[^\]]+\]$/.test(trimmed);
 }
 
 /**
