@@ -26,8 +26,12 @@ function optionNames() {
   const options = new Set(["--help", "--json"]);
   for (const command of COMMANDS) {
     for (const option of [...command.requiredOptions, ...command.optionalOptions]) {
-      const match = option.match(/--[A-Za-z0-9-]+/);
-      if (match) options.add(match[0]);
+      const matches = option.match(/--[A-Za-z0-9-]+/g);
+      if (matches) {
+        for (const match of matches) {
+          options.add(match);
+        }
+      }
     }
   }
   return [...options].sort();

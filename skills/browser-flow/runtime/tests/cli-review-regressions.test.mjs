@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 
 import { classifyCliError } from "../scripts/lib/cli-errors.mjs";
 import { chromeCheck } from "../scripts/commands/doctor.mjs";
+import { renderCompletion } from "../scripts/lib/completion.mjs";
 
 const runtimeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -41,4 +42,11 @@ test("doctor chrome check handles undefined browser paths", () => {
   assert.equal(check.name, "chrome");
   assert.equal(check.status, "warning");
   assert.equal(check.path, undefined);
+});
+
+test("completion includes every flag from grouped option descriptions", () => {
+  const completion = renderCompletion("fish");
+
+  assert.match(completion, /^complete -c browser-flow -l record$/m);
+  assert.match(completion, /^complete -c browser-flow -l search$/m);
 });
