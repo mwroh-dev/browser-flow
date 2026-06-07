@@ -132,9 +132,14 @@ export async function composeCommand(options, deps = {}) {
   const dryRun = options["dry-run"] === true;
 
   const sourcePaths = getRunPaths(runId);
-  const sourceWorkflow = /** @type {{ steps?: unknown[] } & Record<string, unknown>} */ (
-    readJson(sourcePaths.workflowJsonPath)
-  );
+  let sourceWorkflow;
+  try {
+    sourceWorkflow = /** @type {{ steps?: unknown[] } & Record<string, unknown>} */ (
+      readJson(sourcePaths.workflowJsonPath)
+    );
+  } catch (error) {
+    throw new Error(`Source workflow not found at ${sourcePaths.workflowJsonPath}. Run \`bf analyze --run-id ${runId}\` first.`);
+  }
   const decision = await resolvedDeps.decide({ request, sourceWorkflow });
   const derivedRunId = mintDerivedRunId();
   const selection = selectComposeSteps(sourceWorkflow, decision);

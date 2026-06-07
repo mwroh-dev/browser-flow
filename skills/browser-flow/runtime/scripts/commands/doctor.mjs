@@ -227,7 +227,18 @@ function npmCheck() {
  */
 function runtimeDependencyCheck() {
   const repoRoot = getRepoRoot();
-  const missing = REQUIRED_PACKAGES.filter((name) => !existsSync(resolve(repoRoot, "node_modules", name, "package.json")));
+  const missing = REQUIRED_PACKAGES.filter((name) => {
+    let dir = repoRoot;
+    while (true) {
+      if (existsSync(resolve(dir, "node_modules", name, "package.json"))) {
+        return false;
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return true;
+  });
   const writable = checkRuntimeDependencyPreflight(repoRoot);
   if (!writable.ok) {
     return {
@@ -276,10 +287,13 @@ function artifactDirectoriesCheck() {
 }
 
 /**
- * @param {string} path
+ * @param {string | undefined} path
  * @returns {{ path: string, status: "ok" | "warning" | "fail", detail: string }}
  */
-function directoryWritableStatus(path) {
+export function directoryWritableStatus(path) {
+  if (!path) {
+    return { path: "", status: "fail", detail: "path is undefined or empty" };
+  }
   if (!existsSync(path)) {
     return { path, status: "warning", detail: "directory does not exist yet" };
   }

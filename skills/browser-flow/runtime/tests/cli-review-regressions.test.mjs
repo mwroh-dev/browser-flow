@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { classifyCliError } from "../scripts/lib/cli-errors.mjs";
-import { chromeCheck } from "../scripts/commands/doctor.mjs";
+import { chromeCheck, directoryWritableStatus } from "../scripts/commands/doctor.mjs";
 import { renderCompletion } from "../scripts/lib/completion.mjs";
 
 const runtimeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -49,4 +49,34 @@ test("completion includes every flag from grouped option descriptions", () => {
 
   assert.match(completion, /^complete -c browser-flow -l record$/m);
   assert.match(completion, /^complete -c browser-flow -l search$/m);
+});
+
+test("compose wraps missing source workflow reads with a user-facing error", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/commands/compose.mjs"), "utf8");
+
+  assert.match(source, /let sourceWorkflow/);
+  assert.match(source, /catch \(error\)/);
+  assert.match(source, /Source workflow not found .*bf analyze --run-id/);
+});
+
+test("doctor directory writable check handles missing path values", () => {
+  assert.deepEqual(directoryWritableStatus(undefined), {
+    path: "",
+    status: "fail",
+    detail: "path is undefined or empty"
+  });
+});
+
+test("doctor runtime dependency check searches parent node_modules directories", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/commands/doctor.mjs"), "utf8");
+
+  assert.match(source, /while \(true\)/);
+  assert.match(source, /existsSync\(resolve\(dir, "node_modules", name, "package\.json"\)\)/);
+  assert.match(source, /dir = parent/);
+});
+
+test("zsh completion escapes colons in command descriptions", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/lib/completion.mjs"), "utf8");
+
+  assert.match(source, /replace\(\/:\/g, "\\\\:"\)/);
 });

@@ -62,7 +62,7 @@ function renderZshCompletion() {
   const commandEntries = COMMANDS
     .slice()
     .sort((a, b) => commandNames().indexOf(a.name) - commandNames().indexOf(b.name))
-    .map((entry) => `    '${entry.name}:${entry.description.replace(/'/g, "'\\''")}'`);
+    .map((entry) => `    '${entry.name}:${entry.description.replace(/:/g, "\\:").replace(/'/g, "'\\''")}'`);
   const optionEntries = optionNames().map((option) => `    '${option}'`);
   return [
     "#compdef browser-flow",
