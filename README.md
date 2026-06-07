@@ -12,7 +12,7 @@ secrets into files, or bulk scraping.
 
 ## Install
 
-From this released checkout:
+From this repository checkout:
 
 ```bash
 ./install-project-local.sh /path/to/target-project
@@ -57,26 +57,15 @@ limits. Browser Flow has been tested with Korean web services during
 development, but it is not designed as a site-control bypass or unrestricted
 scraping tool.
 
-The released package does not include real-site screenshots, DOM snapshots, or
+The repository does not include real-site screenshots, DOM snapshots, or
 captured run artifacts. Local artifacts can still contain visible page text or
-business data, so do not publish them without review.
+business data, so do not share them without review.
 
 ## CDP Port Note
 
 `serve-browser` defaults to port `9222` for a single shared, manual attach
 session. For named, concurrent, or long-running workflows, choose an explicit
 non-conflicting port and track it in your local environment.
-
-## Latest Release
-
-<!-- browser-flow-latest:start -->
-- Source branch: `main`
-- Source SHA: `1016902`
-- Updated: 2026-06-06T19:18:12.876Z
-- Bundle file count: 230
-- Updated work items:
-  - `verification-quality-fixes`: Verification quality fixes (resolved)
-<!-- browser-flow-latest:end -->
 
 ## History
 

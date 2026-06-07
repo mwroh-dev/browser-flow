@@ -286,7 +286,7 @@ evidence.
 
 For real websites such as Keep, Notion, Naver, GitHub, or other remote
 HTTPS targets, use `--fixture manual --start-url <url> --unmasked`.
-`project-local` describes where the skill bundle and runtime are
+`project-local` describes where the skill package and runtime are
 installed; it does not restrict capture targets to localhost. Under
 `--unmasked`, external URLs may be captured for real-site workflows, but
 the verified workflow registry promotes only replay-verified public-read
@@ -524,7 +524,7 @@ code keep policy enforcement out of prompt prose.
 
 ## Internal Boundary
 
-This skill is the public surface for the installed browser-flow bundle.
+This skill is the public surface for the installed browser-flow package.
 
 - `runtime/scripts/` commands are internal implementation — do
   not expose their structure to the user.
@@ -542,4 +542,4 @@ Load only when the relevant operation occurs (not phase-bound):
 - `references/registry-contract.md` — when reading or updating
   `runtime/knowledge/registry/`
 - `references/commit-protocol.md` — when the user asks to commit or
-  publish the result
+  share the result

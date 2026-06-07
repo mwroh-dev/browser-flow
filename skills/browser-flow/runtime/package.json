@@ -8,6 +8,10 @@
     "browser-flow": "./scripts/cli.mjs"
   },
   "scripts": {
+    "lint": "node scripts/lint.mjs",
+    "test": "node scripts/test/run-suite.mjs --suite=unit",
+    "test:e2e": "node scripts/test/run-suite.mjs --suite=e2e --retries=2",
+    "check": "npm run lint && npm test",
     "validate-skill": "node ../scripts/validate-skill.mjs"
   },
   "dependencies": {
