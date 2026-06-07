@@ -47,8 +47,8 @@ test("doctor chrome check handles undefined browser paths", () => {
 test("completion includes every flag from grouped option descriptions", () => {
   const completion = renderCompletion("fish");
 
-  assert.match(completion, /^complete -c browser-flow -l record$/m);
-  assert.match(completion, /^complete -c browser-flow -l search$/m);
+  assert.match(completion, /^complete -c browser-flow -n '__fish_seen_subcommand_from teardown' -l record$/m);
+  assert.match(completion, /^complete -c browser-flow -n '__fish_seen_subcommand_from teardown' -l search$/m);
 });
 
 test("compose wraps missing source workflow reads with a user-facing error", () => {

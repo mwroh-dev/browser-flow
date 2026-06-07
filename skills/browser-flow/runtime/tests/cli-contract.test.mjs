@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -81,11 +81,15 @@ test("completion exposes command-aware flags and enum values", () => {
   assert.equal(zsh.status, 0, zsh.stderr);
   assert.match(zsh.stdout, /--screenshots/);
   assert.match(zsh.stdout, /off final steps both/);
+  assert.match(zsh.stdout, /case "\$words\[1\]" in/);
+  assert.doesNotMatch(zsh.stdout, /options=\([\s\S]*'--step'[\s\S]*case "\$words\[1\]" in/);
 
   const fish = runCli(["completion", "fish"]);
   assert.equal(fish.status, 0, fish.stderr);
   assert.match(fish.stdout, /complete -c browser-flow -n '__fish_seen_subcommand_from verify' -l screenshots/);
   assert.match(fish.stdout, /-a 'off final steps both'/);
+  assert.doesNotMatch(fish.stdout, /^complete -c browser-flow -l step$/m);
+  assert.match(fish.stdout, /^complete -c browser-flow -n '__fish_seen_subcommand_from extract' -l step$/m);
 });
 
 test("typed cli errors bypass regex classification", () => {
@@ -101,6 +105,7 @@ test("typed cli errors bypass regex classification", () => {
 });
 
 test("release cli smoke works without importing heavy command modules first", () => {
+  assert.equal(runCli([]).status, 0);
   assert.equal(runCli(["help"]).status, 0);
   assert.equal(runCli(["schema"]).status, 0);
   assert.equal(runCli(["schema", "command", "verify"]).status, 0);
@@ -112,4 +117,12 @@ test("release cli smoke works without importing heavy command modules first", ()
   assert.equal(missing.status, 3);
   assert.equal(missing.stderr, "");
   assert.equal(JSON.parse(missing.stdout).error.code, "missing_required_option");
+});
+
+test("cli-main catch block safely falls back if command parsing throws", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/cli-main.mjs"), "utf8");
+
+  assert.match(source, /let command = "help"/);
+  assert.match(source, /try \{\n\s+const parsed = parseCommandLine\(process\.argv\)/);
+  assert.match(source, /catch \{\n\s+options = \{\}/);
 });

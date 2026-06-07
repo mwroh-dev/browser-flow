@@ -37,7 +37,15 @@ async function main(argv) {
 try {
   await main(process.argv);
 } catch (error) {
-  const { command, options } = parseCommandLine(process.argv);
+  let command = "help";
+  let options = {};
+  try {
+    const parsed = parseCommandLine(process.argv);
+    command = parsed.command || "help";
+    options = parsed.options;
+  } catch {
+    options = {};
+  }
   const failure = classifyCliError(error, { command });
   process.exitCode = failure.exitCode;
   if (isJsonErrorMode(process.argv, options)) {

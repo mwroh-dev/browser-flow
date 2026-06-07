@@ -70,7 +70,10 @@ function renderZshCompletion() {
     .slice()
     .sort((a, b) => commandNames().indexOf(a.name) - commandNames().indexOf(b.name))
     .map((entry) => `    '${entry.name}:${entry.description.replace(/:/g, "\\:").replace(/'/g, "'\\''")}'`);
-  const optionEntries = optionNames().map((option) => `    '${option}'`);
+  const optionCases = COMMANDS.map((command) => {
+    const entries = optionNamesFor(command).map((option) => `      '${option}'`).join("\n");
+    return [`    ${command.name})`, "      options=(", entries, "      )", "      ;;"].join("\n");
+  });
   const enumEntries = [];
   for (const command of COMMANDS) {
     for (const option of command.options) {
@@ -88,9 +91,12 @@ function renderZshCompletion() {
     "  commands=(",
     ...commandEntries,
     "  )",
-    "  options=(",
-    ...optionEntries,
-    "  )",
+    "  case \"$words[1]\" in",
+    ...optionCases,
+    "    *)",
+    "      options=('--help' '--json')",
+    "      ;;",
+    "  esac",
     "  # enum value hints",
     ...enumEntries,
     "  _arguments \\",
@@ -112,9 +118,6 @@ function renderFishCompletion() {
     "# browser-flow fish completion",
     `complete -c browser-flow -f -a '${commands}'`
   ];
-  for (const option of optionNames()) {
-    lines.push(`complete -c browser-flow -l ${option.slice(2)}`);
-  }
   for (const command of COMMANDS) {
     for (const option of optionNamesFor(command)) {
       lines.push(`complete -c browser-flow -n '__fish_seen_subcommand_from ${command.name}' -l ${option.slice(2)}`);

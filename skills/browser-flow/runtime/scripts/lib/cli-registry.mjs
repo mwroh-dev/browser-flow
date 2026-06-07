@@ -153,23 +153,24 @@ export function validateRequiredOptions(metadata, options) {
  */
 export function resolveRegistryEntry(argv) {
   const { command, options } = parseCommandLine(argv);
-  if (command === "--help" || command === "-h") {
+  const resolvedCommand = command || "help";
+  if (resolvedCommand === "--help" || resolvedCommand === "-h") {
     return { entry: COMMAND_REGISTRY.get("help"), command: "help", options };
   }
-  const entry = COMMAND_REGISTRY.get(command);
-  if (!entry) throw invalidUsage(`Unknown command "${command}".`);
-  if (options.help === true && command !== "help") {
+  const entry = COMMAND_REGISTRY.get(resolvedCommand);
+  if (!entry) throw invalidUsage(`Unknown command "${resolvedCommand}".`);
+  if (options.help === true && resolvedCommand !== "help") {
     return {
       entry: {
         name: "help",
         metadata: COMMANDS_BY_NAME.get("help"),
         outputMode: "text",
         beforeRun: ensureBootstrapDirs,
-        run: () => renderCommandHelp(command) ?? renderTopLevelHelp(getRepoRoot())
+        run: () => renderCommandHelp(resolvedCommand) ?? renderTopLevelHelp(getRepoRoot())
       },
       command: "help",
       options
     };
   }
-  return { entry, command, options };
+  return { entry, command: resolvedCommand, options };
 }
