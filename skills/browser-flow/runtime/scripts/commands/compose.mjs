@@ -129,6 +129,7 @@ export async function composeCommand(options, deps = {}) {
 
   const request = getStringOption(options, "request", undefined);
   if (!request) throw new Error("bf compose requires --request");
+  const dryRun = options["dry-run"] === true;
 
   const sourcePaths = getRunPaths(runId);
   const sourceWorkflow = /** @type {{ steps?: unknown[] } & Record<string, unknown>} */ (
@@ -136,10 +137,35 @@ export async function composeCommand(options, deps = {}) {
   );
   const decision = await resolvedDeps.decide({ request, sourceWorkflow });
   const derivedRunId = mintDerivedRunId();
-  const derivedPaths = ensureRunDirs(derivedRunId);
   const selection = selectComposeSteps(sourceWorkflow, decision);
   const { selectedSteps, selectedSegmentIndexes } = selection;
   const learningNeeded = decision?.candidateHints?.stopAfterSegment !== undefined;
+  const previewPaths = getRunPaths(derivedRunId);
+  if (dryRun) {
+    return {
+      ok: true,
+      dryRun: true,
+      sourceRunId: runId,
+      request,
+      derivedRunId,
+      planned: {
+        selectedSegmentIndexes,
+        selectedStepCount: selectedSteps.length,
+        learningNeeded,
+        blockedReason: selection.blockedReason ? normalizeBlockedReason(selection.blockedReason) : "none",
+        policyMode: composePolicyMode(sourceWorkflow)
+      },
+      wouldWrite: [
+        previewPaths.composeRequestPath,
+        previewPaths.composePlanPath,
+        previewPaths.workflowJsonPath,
+        previewPaths.runnerPath,
+        previewPaths.composeSummaryPath
+      ],
+      wouldRun: learningNeeded ? ["learn-gap", "generate", "verify"] : ["generate", "verify"]
+    };
+  }
+  const derivedPaths = ensureRunDirs(derivedRunId);
   const learnResult = learningNeeded
     ? await resolvedDeps.learnGap({ request, decision, sourceWorkflow, composePaths: derivedPaths })
     : { status: "not-needed", learnedSteps: [] };

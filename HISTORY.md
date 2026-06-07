@@ -6,6 +6,77 @@ project: what problem surfaced, what changed, and what capability or release
 posture improved as a result.
 
 <!-- browser-flow-history:start -->
+## Work Item: cli-public-surface - CLI public surface
+
+- Status: resolved
+- First recorded: 2026-06-07T07:22:35.311Z
+- Last updated: 2026-06-07T07:22:35.311Z
+
+### User Request
+Sync the CLI public-surface work into the released browser-flow package after the verification-quality release was merged.
+
+### Why It Mattered
+The installed package needs the same CLI affordances, error contracts, schema metadata, docs, and missing-option regression fix that were validated in the source repo, without carrying local runtime smoke artifacts or learned knowledge into the public release.
+
+### Model Conclusion
+The release should expose the workflow-oriented CLI contract and keep the bug fix for missing string option values, while preserving the existing typecheck baseline as a documented pre-existing source issue rather than treating it as a release blocker.
+
+### Changes Made
+Synced CLI help and topic documentation, machine-readable schema and capabilities output, stable error taxonomy, dry-run previews, doctor preflight reporting, shell completion, consistency tests, docs, generated-source scanner false-positive reductions, and the missing string option value fix with its regression test.
+
+### Expected Resolution
+Users and agents installing the released package can discover commands, inspect command contracts, rely on stable invalid-usage errors, run safer previews and doctor checks, and receive a clear error when a string option is provided without a value.
+
+### Validation
+On the integrated source branch: npm run lint passed; the focused CLI/docs/security/analyze/observe test command passed 111/111; npm run validate-skill passed. The CLI validation report records npm run check as a pre-existing typecheck baseline on main/merge-base, not branch-only. During release sync: release audit and project-local install smoke are expected to run before publication.
+
+### Publication Notes
+This release sync contains CLI public-surface changes only. The verification-quality work was already published separately; the source merge commit preserves release ancestry after that merge. Runtime smoke artifacts, registry entries, and page-node knowledge are not part of this release branch.
+
+### Updates
+
+#### 2026-06-07T07:22:35.311Z - cf4c72d
+
+- Source branch: main
+- Source SHA: cf4c72d
+- Release SHA: pending-this-commit
+- Bundle file count: 233
+- Related source commits:
+  - 585f13b phase0/bootstrap: record CLI baseline audit
+  - 6b346e1 phase1/help: add workflow-oriented CLI help
+  - 22c9fcc phase2/schema: expose CLI contract JSON
+  - 7ec8255 phase3/error-contract: stabilize CLI failure output
+  - 34e1bbd phase4/safety: add dry-run previews and doctor preflight
+  - 04678a4 phase5/docs: document CLI and add shell completion
+  - 069ecc3 phase6/final-review: lock CLI surface consistency
+  - d1bdec7 phase7/security-scan: reduce generated artifact false positives
+  - f23426b fix/cli: reject missing string option values
+  - 0e2acf9 test/report: record CLI public-surface validation
+  - 97c26de test/report: document typecheck baseline comparison
+  - cf4c72d merge verification quality fixes into CLI public surface
+
+##### User Request
+Sync the CLI public-surface work into the released browser-flow package after the verification-quality release was merged.
+
+##### Why It Mattered
+The installed package needs the same CLI affordances, error contracts, schema metadata, docs, and missing-option regression fix that were validated in the source repo, without carrying local runtime smoke artifacts or learned knowledge into the public release.
+
+##### Model Conclusion
+The release should expose the workflow-oriented CLI contract and keep the bug fix for missing string option values, while preserving the existing typecheck baseline as a documented pre-existing source issue rather than treating it as a release blocker.
+
+##### Changes Made
+Synced CLI help and topic documentation, machine-readable schema and capabilities output, stable error taxonomy, dry-run previews, doctor preflight reporting, shell completion, consistency tests, docs, generated-source scanner false-positive reductions, and the missing string option value fix with its regression test.
+
+##### Expected Resolution
+Users and agents installing the released package can discover commands, inspect command contracts, rely on stable invalid-usage errors, run safer previews and doctor checks, and receive a clear error when a string option is provided without a value.
+
+##### Validation
+On the integrated source branch: npm run lint passed; the focused CLI/docs/security/analyze/observe test command passed 111/111; npm run validate-skill passed. The CLI validation report records npm run check as a pre-existing typecheck baseline on main/merge-base, not branch-only. During release sync: release audit and project-local install smoke are expected to run before publication.
+
+##### Publication Notes
+This release sync contains CLI public-surface changes only. The verification-quality work was already published separately; the source merge commit preserves release ancestry after that merge. Runtime smoke artifacts, registry entries, and page-node knowledge are not part of this release branch.
+
+
 ## Work Item: verification-quality-fixes - Verification quality fixes
 
 - Status: resolved

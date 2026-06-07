@@ -71,11 +71,11 @@ non-conflicting port and track it in your local environment.
 
 <!-- browser-flow-latest:start -->
 - Source branch: `main`
-- Source SHA: `1016902`
-- Updated: 2026-06-06T19:18:12.876Z
-- Bundle file count: 230
+- Source SHA: `cf4c72d`
+- Updated: 2026-06-07T07:22:35.311Z
+- Bundle file count: 233
 - Updated work items:
-  - `verification-quality-fixes`: Verification quality fixes (resolved)
+- `cli-public-surface`: CLI public surface (resolved)
 <!-- browser-flow-latest:end -->
 
 ## History

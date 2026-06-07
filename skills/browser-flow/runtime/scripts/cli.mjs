@@ -9,6 +9,12 @@ import {
   checkRuntimeDependencyPreflight,
   formatRuntimePreflightError
 } from "./lib/runtime-preflight.mjs";
+import {
+  classifyCliError,
+  formatHumanCliError,
+  formatJsonCliError,
+  isJsonErrorMode
+} from "./lib/cli-errors.mjs";
 
 const runtimeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const requiredPackages = ["chrome-remote-interface", "parse5", "cheerio", "zod"];
@@ -61,9 +67,13 @@ async function runCli() {
     ensureRuntimeDependencies();
     await import("./cli-main.mjs");
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
+    const failure = classifyCliError(error, { command: process.argv[2] });
+    process.exitCode = failure.exitCode;
+    if (isJsonErrorMode(process.argv)) {
+      process.stdout.write(`${JSON.stringify(formatJsonCliError(failure), null, 2)}\n`);
+    } else {
+      process.stderr.write(formatHumanCliError(failure));
+    }
   }
 }
 

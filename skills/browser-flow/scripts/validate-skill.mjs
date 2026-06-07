@@ -39,6 +39,7 @@ const requiredRuntimeFiles = [
   "scripts/compose/policy-hooks.mjs",
   "scripts/lib/schemas.mjs",
   "scripts/lib/schema-versions.mjs",
+  "scripts/lib/cli-metadata.mjs",
   "scripts/lib/config.mjs",
   "package.json",
   "package-lock.json"
@@ -197,6 +198,7 @@ if (!Array.isArray(manifest.references)) {
 
 const promptText = readFileSync(resolve(root, "prompt.md"), "utf8");
 const runtimeCliMainText = readFileSync(resolve(runtimeRoot, "scripts/cli-main.mjs"), "utf8");
+const runtimeCliMetadataText = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-metadata.mjs"), "utf8");
 const runtimeConfigText = readFileSync(resolve(runtimeRoot, "scripts/lib/config.mjs"), "utf8");
 const runtimeSchemaVersionsText = readFileSync(resolve(runtimeRoot, "scripts/lib/schema-versions.mjs"), "utf8");
 const runtimeSchemasText = readFileSync(resolve(runtimeRoot, "scripts/lib/schemas.mjs"), "utf8");
@@ -447,8 +449,8 @@ if (
 if (!/import\s+\{\s*composeCommand\s*\}\s+from\s+"\.\/commands\/compose\.mjs"/.test(runtimeCliMainText)) {
   throw new Error("runtime/scripts/cli-main.mjs must import composeCommand.");
 }
-if (!/compose\s+Compose a primary workflow request/i.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs help text must document the compose command.");
+if (!/name:\s*"compose"[\s\S]*description:\s*"Compose a primary workflow request/i.test(runtimeCliMetadataText)) {
+  throw new Error("runtime/scripts/lib/cli-metadata.mjs help metadata must document the compose command.");
 }
 if (!/if \(command === "compose"\)/.test(runtimeCliMainText)) {
   throw new Error("runtime/scripts/cli-main.mjs must dispatch the compose command.");

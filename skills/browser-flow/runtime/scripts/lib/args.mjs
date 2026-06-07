@@ -35,6 +35,9 @@ export function getStringOption(options, key, fallback) {
   if (typeof value === "string") {
     return value;
   }
+  if (value === true) {
+    throw new Error(`invalid --${key} requires a value.`);
+  }
   return fallback;
 }
 
