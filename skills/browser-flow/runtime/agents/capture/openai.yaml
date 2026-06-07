@@ -1,0 +1,13 @@
+name: capture
+role_type: phase
+description: Specialist agent for the capture phase. Manages Chrome CDP session lifecycle (prepare + done) for one workflow run.
+phase: capture
+inputs:
+  - run-id (orchestrator-supplied)
+  - fixture (orchestrator-supplied; one of synthetic, docs, stateful, submit, secret, manual)
+outputs:
+  - artifacts/runs/<run-id>/events/sanitized-events.json
+guardrails:
+  - Target URL must be local. scripts/security/local-only.mjs enforces this.
+  - Never log or inspect raw cookies, auth headers, session tokens, CSRF values, or screenshots.
+  - Use a dedicated non-default Chrome debug profile.

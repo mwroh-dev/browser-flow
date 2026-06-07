@@ -11,6 +11,7 @@ import {
 } from "./lib/runtime-preflight.mjs";
 import {
   classifyCliError,
+  dependencyPreflightFailure,
   formatHumanCliError,
   formatJsonCliError,
   isJsonErrorMode
@@ -42,7 +43,7 @@ function ensureRuntimeDependencies() {
 
   const preflight = checkRuntimeDependencyPreflight(runtimeRoot);
   if (!preflight.ok) {
-    throw new Error(formatRuntimePreflightError(runtimeRoot, preflight));
+    throw dependencyPreflightFailure(formatRuntimePreflightError(runtimeRoot, preflight));
   }
 
   process.stderr.write("[browser-flow] preparing bundled runtime dependencies...\n");
@@ -58,7 +59,7 @@ function ensureRuntimeDependencies() {
 
   if (result.status !== 0) {
     const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    throw new Error(formatDependencyInstallError(runtimeRoot, detail));
+    throw dependencyPreflightFailure(formatDependencyInstallError(runtimeRoot, detail));
   }
 }
 

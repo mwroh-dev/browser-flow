@@ -162,24 +162,13 @@ export function classifyCliError(error, context = {}) {
     };
   }
   const message = errorMessage(error);
-  const command = normalizeCommand(context.command);
-  const code = classifyMessage(message);
-  const definition = EXIT_CODE_BY_CODE.get(code) ?? EXIT_CODE_BY_CODE.get("runtime_error");
-  if (!definition) {
-    return {
-      code: "runtime_error",
-      exitCode: 1,
-      message,
-      recoverable: false,
-      suggestedCommands: ["browser-flow help"]
-    };
-  }
+  const definition = EXIT_CODE_BY_CODE.get("runtime_error");
   return {
-    code: definition.code,
-    exitCode: definition.status,
-    message: normalizeErrorMessage(message, definition.code, command),
-    recoverable: definition.recoverable,
-    suggestedCommands: suggestedCommandsFor(definition.code, message, command)
+    code: definition?.code ?? "runtime_error",
+    exitCode: definition?.status ?? 1,
+    message,
+    recoverable: definition?.recoverable ?? false,
+    suggestedCommands: ["browser-flow help"]
   };
 }
 
@@ -236,101 +225,6 @@ export function formatJsonCliError(failure) {
  */
 export function isJsonErrorMode(argv, options = {}) {
   return options.json === true || argv.includes("--json");
-}
-
-/**
- * @param {string} message
- */
-function classifyMessage(message) {
-  const text = message.trim();
-  if (/^Unknown command\b/i.test(text) || /schema command requires a known command name/i.test(text)) {
-    return "invalid_usage";
-  }
-  if (/Diagnostic replay succeeded|not promotable|promotion is blocked/i.test(text)) {
-    return "diagnostic_not_promotable";
-  }
-  if (/requires a passed replay|replay did not pass|verification(?:\.json)? .*not green|verification_not_green/i.test(text)) {
-    return "verification_not_green";
-  }
-  if (/review required|requires review|needs_review|checkpoint|required before analyze|requested recapture|drift-hold/i.test(text)) {
-    return "checkpoint_required";
-  }
-  if (/Unable to prepare browser-flow runtime dependencies|Chrome binary not found|preflight|npm ci/i.test(text)) {
-    return "dependency_preflight_failure";
-  }
-  if (/policy_blocked|security scan|security\.json .*not green|security ok:true|permission denied|operation not permitted|non-local|unmasked|blocked by safety/i.test(text)) {
-    return "safety_or_permission_block";
-  }
-  if (/requires (?:both )?(?:verification\.json|security\.json|workflow\.json|data-result\.json)|requires .*\.json|no .* for run\b|no snapshots in manifest|not found|ENOENT|missing .*artifact/i.test(text)) {
-    return "missing_run_artifact";
-  }
-  if (/requires --|requires .*--|missing required|must provide/i.test(text)) {
-    return "missing_required_option";
-  }
-  if (/invalid --|invalid .*mode|mutually exclusive|requires either|Expected one of|Unknown compose checkpoint|completion supports bash, zsh, or fish/i.test(text)) {
-    return "invalid_usage";
-  }
-  return "runtime_error";
-}
-
-/**
- * @param {string} message
- * @param {string} code
- * @param {string} command
- */
-function normalizeErrorMessage(message, code, command) {
-  const text = message.trim();
-  if (code === "invalid_usage" && /^Unknown command\b/i.test(text)) {
-    return text;
-  }
-  if (code === "invalid_usage" && /^Command "/.test(text)) {
-    return text.replace(/^Command "([^"]+)".*$/s, 'Unknown command "$1".');
-  }
-  if (code === "missing_required_option" && command && /requires --/i.test(text)) {
-    return text;
-  }
-  return text;
-}
-
-/**
- * @param {string | undefined} command
- */
-function normalizeCommand(command) {
-  if (!command || command.startsWith("-")) return "";
-  return command;
-}
-
-/**
- * @param {string} code
- * @param {string} message
- * @param {string} command
- */
-function suggestedCommandsFor(code, message, command) {
-  if (code === "invalid_usage") {
-    return command ? [`browser-flow ${command} --help`, "browser-flow help"] : ["browser-flow help"];
-  }
-  if (code === "missing_required_option") {
-    return command ? [`browser-flow ${command} --help`] : ["browser-flow help"];
-  }
-  if (code === "missing_run_artifact") {
-    return command ? [`browser-flow ${command} --help`, "browser-flow help artifacts"] : ["browser-flow help artifacts"];
-  }
-  if (code === "dependency_preflight_failure") {
-    return ["npm ci --omit=dev --ignore-scripts --no-audit --no-fund", "browser-flow doctor"];
-  }
-  if (code === "safety_or_permission_block") {
-    return ["browser-flow help safety"];
-  }
-  if (code === "checkpoint_required") {
-    return checkpointSuggestions(message, command);
-  }
-  if (code === "verification_not_green") {
-    return command ? [`browser-flow ${command} --help`, "browser-flow help safety"] : ["browser-flow help safety"];
-  }
-  if (code === "diagnostic_not_promotable") {
-    return ["browser-flow promote --help", "browser-flow help safety"];
-  }
-  return ["browser-flow help"];
 }
 
 /**

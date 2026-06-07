@@ -1,0 +1,15 @@
+{
+  "include": [
+    "surfaces/release/README.md",
+    "surfaces/release/HISTORY.md",
+    "LICENSE",
+    "SECURITY.md",
+    "INSTALL.md",
+    "install-project-local.sh",
+    "scripts/publish/render-browser-flow-surfaces-cli.mjs",
+    "scripts/publish/render-browser-flow-surfaces.mjs",
+    "surfaces/browser-flow/public/entry.md",
+    "surfaces/browser-flow/adapters/claude/browser-flow.md.tmpl"
+  ],
+  "exclude": []
+}

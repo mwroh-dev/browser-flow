@@ -1,0 +1,12 @@
+name: analyzer
+role_type: phase
+description: Specialist agent for the analyze phase. Compiles sanitized CDP events into path.yaml and recipe.yaml.
+phase: analyze
+inputs:
+  - artifacts/runs/<run-id>/events/sanitized-events.json
+outputs:
+  - artifacts/runs/<run-id>/path.yaml
+  - artifacts/runs/<run-id>/recipe.yaml
+guardrails:
+  - Do not access or modify raw event files.
+  - Produce both path.yaml and recipe.yaml or report failure explicitly.

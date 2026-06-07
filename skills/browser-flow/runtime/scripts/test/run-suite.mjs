@@ -27,7 +27,7 @@ const e2eListPath = resolve(repoRoot, "scripts", "test", "e2e-suite.json");
 
 /**
  * @param {string[]} argv
- * @returns {{ suite: string, retries: number, testsRoot: string, e2eListPath: string, setup: boolean }}
+ * @returns {{ suite: string, retries: number, testsRoot: string, e2eListPath: string, setup: boolean, batchSize: number }}
  */
 function parseArgs(argv) {
   let suite = "unit";
@@ -35,14 +35,16 @@ function parseArgs(argv) {
   let testsRootOverride = testsRoot;
   let e2eListPathOverride = e2eListPath;
   let setup = true;
+  let batchSize = 1;
   for (const arg of argv) {
     if (arg.startsWith("--suite=")) suite = arg.slice("--suite=".length);
     else if (arg.startsWith("--retries=")) retries = Number(arg.slice("--retries=".length)) || 0;
     else if (arg.startsWith("--tests-root=")) testsRootOverride = resolve(arg.slice("--tests-root=".length));
     else if (arg.startsWith("--e2e-list=")) e2eListPathOverride = resolve(arg.slice("--e2e-list=".length));
     else if (arg === "--no-setup") setup = false;
+    else if (arg.startsWith("--batch-size=")) batchSize = Number(arg.slice("--batch-size=".length)) || 0;
   }
-  return { suite, retries, testsRoot: testsRootOverride, e2eListPath: e2eListPathOverride, setup };
+  return { suite, retries, testsRoot: testsRootOverride, e2eListPath: e2eListPathOverride, setup, batchSize };
 }
 
 /**
@@ -90,6 +92,42 @@ function runLive(files, setup) {
 }
 
 /**
+ * @param {string[]} files
+ * @param {number} size
+ * @returns {string[][]}
+ */
+function batchFiles(files, size) {
+  if (!Number.isFinite(size) || size <= 0 || files.length <= size) return [files];
+  /** @type {string[][]} */
+  const batches = [];
+  for (let index = 0; index < files.length; index += size) {
+    batches.push(files.slice(index, index + size));
+  }
+  return batches;
+}
+
+/**
+ * Run suites as deterministic batches. A single node:test process with many
+ * release-tree files can spend excessive time in runner output bookkeeping,
+ * which makes the release smoke lane harder to trust.
+ * @param {string[]} files
+ * @param {boolean} setup
+ * @param {number} batchSize
+ * @returns {number}
+ */
+function runLiveBatched(files, setup, batchSize) {
+  const batches = batchFiles(files, batchSize);
+  for (let index = 0; index < batches.length; index += 1) {
+    if (batches.length > 1) {
+      process.stdout.write(`[run-suite] batch ${index + 1}/${batches.length} (${batches[index].length} file(s))\n`);
+    }
+    const code = runLive(batches[index], setup);
+    if (code !== 0) return code;
+  }
+  return 0;
+}
+
+/**
  * Run files capturing stdout so failed FILES can be parsed for retry.
  * node:test prints a top-level `not ok N - <abs file path>` per failing file.
  * @param {string[]} files
@@ -116,7 +154,7 @@ function runCapturing(files, setup) {
 }
 
 function main() {
-  const { suite, retries, testsRoot, e2eListPath, setup } = parseArgs(process.argv.slice(2));
+  const { suite, retries, testsRoot, e2eListPath, setup, batchSize } = parseArgs(process.argv.slice(2));
 
   const all = walkTests(testsRoot).sort();
 
@@ -128,7 +166,8 @@ function main() {
     process.stderr.write(`[run-suite] e2e-suite.json lists missing file(s):\n  ${stale.join("\n  ")}\n`);
     process.exit(2);
   }
-  const e2eSet = new Set(e2eList.filter((file) => !stale.includes(file)));
+  const discoveredE2e = all.filter((file) => file.startsWith("tests/e2e/") || file.includes("/tests/e2e/"));
+  const e2eSet = new Set([...e2eList.filter((file) => !stale.includes(file)), ...discoveredE2e]);
   const unit = all.filter((file) => !e2eSet.has(file));
   const e2e = all.filter((file) => e2eSet.has(file));
 
@@ -145,7 +184,7 @@ function main() {
 
   process.stdout.write(
     `[run-suite] suite=${suite} → ${files.length} file(s) ` +
-    `(unit=${unit.length}, e2e=${e2e.length}, total=${all.length}, retries=${retries})\n`
+    `(unit=${unit.length}, e2e=${e2e.length}, total=${all.length}, retries=${retries}, batchSize=${batchSize})\n`
   );
 
   if (files.length === 0) {
@@ -155,7 +194,7 @@ function main() {
   }
 
   if (retries <= 0) {
-    process.exit(runLive(files, setup));
+    process.exit(runLiveBatched(files, setup, batchSize));
     return;
   }
 

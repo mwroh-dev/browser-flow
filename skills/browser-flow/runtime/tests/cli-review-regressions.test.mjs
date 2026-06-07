@@ -20,10 +20,10 @@ test("classifyCliError handles Error instances with nullish messages", () => {
   assert.equal(failure.message, "");
 });
 
-test("classifyCliError preserves plain object message values", () => {
+test("classifyCliError does not regex-classify plain object message values", () => {
   const failure = classifyCliError({ message: "requires --run-id" }, { command: "verify" });
 
-  assert.equal(failure.code, "missing_required_option");
+  assert.equal(failure.code, "runtime_error");
   assert.equal(failure.message, "requires --run-id");
 });
 

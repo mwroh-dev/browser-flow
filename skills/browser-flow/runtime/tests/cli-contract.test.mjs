@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -48,6 +48,23 @@ test("release unit suite ignores stale e2e entries outside e2e/all suites", () =
   assert.match(e2e.stderr, /lists missing file/);
 });
 
+test("release unit suite structurally quarantines tests/e2e files even when manifest misses them", () => {
+  const root = mkdtempSync(resolve(tmpdir(), "bf-suite-e2e-dir-"));
+  mkdirSync(resolve(root, "tests", "e2e"), { recursive: true });
+  writeFileSync(resolve(root, "package.json"), "{\"type\":\"module\"}\n");
+  writeFileSync(resolve(root, "ok.test.mjs"), "import test from 'node:test'; test('ok', () => {});\n");
+  writeFileSync(resolve(root, "tests", "e2e", "chrome.test.mjs"), "import test from 'node:test'; test('e2e', () => { throw new Error('should not run in unit'); });\n");
+  writeFileSync(resolve(root, "e2e-suite.json"), JSON.stringify({ files: [] }));
+
+  const script = resolve(runtimeRoot, "scripts/test/run-suite.mjs");
+  const unit = spawnSync(process.execPath, [script, "--suite=unit", `--tests-root=${root}`, `--e2e-list=${resolve(root, "e2e-suite.json")}`, "--no-setup"], {
+    cwd: runtimeRoot,
+    encoding: "utf8"
+  });
+  assert.equal(unit.status, 0, unit.stderr || unit.stdout);
+  assert.match(unit.stdout, /unit=1, e2e=1, total=2/);
+});
+
 test("command registry and metadata stay in parity", () => {
   const metadataNames = new Set(COMMANDS.map((entry) => entry.name));
   const registryNames = new Set(COMMAND_REGISTRY.keys());
@@ -71,6 +88,8 @@ test("schema and capabilities expose agent contract and macos support scope", ()
 
   assert.equal(schema.agentContract, true);
   assert.deepEqual(schema.supportScope, SUPPORT_SCOPE);
+  assert.equal("requiredOptions" in verify.command, false);
+  assert.equal("optionalOptions" in verify.command, false);
   assert.equal(capabilities.agentContract, true);
   assert.deepEqual(capabilities.supportScope, SUPPORT_SCOPE);
   assert.ok(verify.command.options.some((option) => option.name === "--screenshots" && option.type === "enum"));
@@ -102,6 +121,11 @@ test("typed cli errors bypass regex classification", () => {
   assert.equal(missing.code, "missing_required_option");
   assert.equal(missing.exitCode, 3);
   assert.deepEqual(formatJsonCliError(missing).error.suggestedCommands, ["browser-flow verify --help"]);
+
+  const untyped = classifyCliError(new Error("verify requires --run-id."));
+  assert.equal(untyped.code, "runtime_error");
+  assert.equal(untyped.exitCode, 1);
+  assert.deepEqual(untyped.suggestedCommands, ["browser-flow help"]);
 });
 
 test("release cli smoke works without importing heavy command modules first", () => {

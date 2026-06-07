@@ -116,7 +116,7 @@ for (const [name, metadata] of COMMANDS_BY_NAME) {
     outputMode: metadata.output,
     beforeRun: name === "doctor" ? ensureBootstrapDirs : undefined,
     run: async (options, argv) => {
-      validateRequiredOptions(metadata, options);
+      validateOptions(metadata, options);
       const command = await COMMAND_LOADERS[name]?.();
       if (!command) throw invalidUsage(`Unknown command "${name}".`);
       return name === "run" ? command(options, argv) : command(options);
@@ -138,12 +138,26 @@ function register(entry) {
  * @param {import("./cli-metadata.mjs").CommandMetadata} metadata
  * @param {Record<string, string | boolean>} options
  */
-export function validateRequiredOptions(metadata, options) {
+export function validateOptions(metadata, options) {
   for (const option of metadata.options) {
-    if (!option.required || !option.name.startsWith("--")) continue;
+    if (!option.name.startsWith("--")) continue;
     const key = option.name.slice(2);
-    if (options[key] === undefined) {
+    const value = options[key];
+    if (option.required && value === undefined) {
       throw missingRequiredOption(`${metadata.name} requires ${option.name}${option.value ? ` <${option.value}>` : ""}.`, metadata.name);
+    }
+    if (value === undefined) continue;
+    if (option.type === "boolean" && value !== true) {
+      throw invalidUsage(`${metadata.name} option ${option.name} does not accept a value.`, [`browser-flow ${metadata.name} --help`]);
+    }
+    if ((option.type === "string" || option.type === "enum") && value === true) {
+      throw invalidUsage(`${metadata.name} option ${option.name} requires a value.`, [`browser-flow ${metadata.name} --help`]);
+    }
+    if (option.type === "enum" && typeof value === "string" && !option.values.includes(value)) {
+      throw invalidUsage(
+        `${metadata.name} option ${option.name} must be one of: ${option.values.join(" | ")}.`,
+        [`browser-flow ${metadata.name} --help`]
+      );
     }
   }
 }

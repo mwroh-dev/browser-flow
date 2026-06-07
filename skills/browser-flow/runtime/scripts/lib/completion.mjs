@@ -1,4 +1,5 @@
 import { COMMANDS } from "./cli-metadata.mjs";
+import { invalidUsage } from "./cli-errors.mjs";
 
 const SUPPORTED_SHELLS = new Set(["bash", "zsh", "fish"]);
 const PRIMARY_COMMANDS = ["prepare", "done", "analyze", "generate", "verify"];
@@ -8,7 +9,7 @@ const PRIMARY_COMMANDS = ["prepare", "done", "analyze", "generate", "verify"];
  */
 export function renderCompletion(shell) {
   if (!shell || !SUPPORTED_SHELLS.has(shell)) {
-    throw new Error("completion supports bash, zsh, or fish.");
+    throw invalidUsage("completion supports bash, zsh, or fish.", ["browser-flow completion bash", "browser-flow completion zsh", "browser-flow completion fish"]);
   }
   if (shell === "bash") return renderBashCompletion();
   if (shell === "zsh") return renderZshCompletion();

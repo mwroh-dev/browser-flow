@@ -33,8 +33,6 @@ export const COMMAND_GROUPS = [
  *   classification: "public" | "advanced" | "internal",
  *   description: string,
  *   usage: string,
- *   requiredOptions: string[],
- *   optionalOptions: string[],
  *   options: CommandOption[],
  *   examples: string[],
  *   sideEffects: string[],
@@ -72,7 +70,6 @@ export const COMMANDS = [
     classification: "public",
     description: "Print the machine-readable browser-flow CLI schema.",
     usage: "browser-flow schema [command <name>]",
-    optionalOptions: ["command <name> positional arguments"],
     examples: ["browser-flow schema", "browser-flow schema command verify"],
     sideEffects: ["Read-only; writes JSON schema to stdout."],
     artifacts: ["None."],
@@ -101,7 +98,11 @@ export const COMMANDS = [
     classification: "public",
     description: "Report page-node staleness and local runtime preflight readiness.",
     usage: "browser-flow doctor [--page-key <pageKey>] [--chrome-path <path>]",
-    optionalOptions: ["--page-key <pageKey>", "--chrome-path <path>", "--json"],
+    options: [
+      { name: "--chrome-path", value: "path", required: false, type: "string", values: [], description: "--chrome-path <path>" },
+      { name: "--json", required: false, type: "boolean", values: [], description: "--json" },
+      { name: "--page-key", value: "pageKey", required: false, type: "string", values: [], description: "--page-key <pageKey>" },
+    ],
     examples: ["browser-flow doctor", "browser-flow doctor --page-key synthetic/synthetic/result"],
     sideEffects: ["Read-only diagnostic; creates bootstrap directories if missing."],
     artifacts: ["Reads knowledge/pages/<pageKey>/meta.json, snapshots/*.html.gz, registry metadata, and runtime dependency paths."],
@@ -117,7 +118,11 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Launch a visible Chrome profile for human login and later attach verification.",
     usage: "browser-flow serve-browser [--run-id <id>] [--port <port>] [--url <site>]",
-    optionalOptions: ["--run-id <id>", "--port <port>", "--url <site>"],
+    options: [
+      { name: "--port", value: "port", required: false, type: "string", values: [], description: "--port <port>" },
+      { name: "--run-id", value: "id", required: false, type: "string", values: [], description: "--run-id <id>" },
+      { name: "--url", value: "site", required: false, type: "string", values: [], description: "--url <site>" },
+    ],
     examples: [
       "browser-flow serve-browser --run-id demo --port 9223",
       "browser-flow serve-browser --url https://example.com --port 9223"
@@ -137,7 +142,9 @@ export const COMMANDS = [
     classification: "public",
     description: "Print static shell completion for browser-flow commands and common flags.",
     usage: "browser-flow completion <bash|zsh|fish>",
-    requiredOptions: ["bash, zsh, or fish shell argument"],
+    options: [
+      { name: "shell", value: "shell", required: true, type: "enum", values: ["bash", "zsh", "fish"], description: "Completion shell positional argument." }
+    ],
     examples: [
       "browser-flow completion bash > /usr/local/etc/bash_completion.d/browser-flow",
       "browser-flow completion zsh > ~/.zfunc/_browser-flow",
@@ -156,17 +163,17 @@ export const COMMANDS = [
     classification: "public",
     description: "Create a capture session with an isolated Chrome debug profile.",
     usage: "browser-flow prepare [--run-id <id>] [--fixture <fixture>] [--start-url <url>] [--unmasked] [--snapshot-dom] [--profile-name <name>] [--headless]",
-    optionalOptions: [
-      "--run-id <id>",
-      "--fixture <fixture>",
-      "--start-url <url>",
-      "--unmasked",
-      "--snapshot-dom",
-      "--profile-name <name>",
-      "--headless",
-      "--chrome-path <path>",
-      "--debug-port <port>",
-      "--capture-mode normal|strict"
+    options: [
+      { name: "--capture-mode", required: false, type: "enum", values: ["normal","strict"], description: "--capture-mode normal|strict" },
+      { name: "--chrome-path", value: "path", required: false, type: "string", values: [], description: "--chrome-path <path>" },
+      { name: "--debug-port", value: "port", required: false, type: "string", values: [], description: "--debug-port <port>" },
+      { name: "--fixture", value: "fixture", required: false, type: "string", values: [], description: "--fixture <fixture>" },
+      { name: "--headless", required: false, type: "boolean", values: [], description: "--headless" },
+      { name: "--profile-name", value: "name", required: false, type: "string", values: [], description: "--profile-name <name>" },
+      { name: "--run-id", value: "id", required: false, type: "string", values: [], description: "--run-id <id>" },
+      { name: "--snapshot-dom", required: false, type: "boolean", values: [], description: "--snapshot-dom" },
+      { name: "--start-url", value: "url", required: false, type: "string", values: [], description: "--start-url <url>" },
+      { name: "--unmasked", required: false, type: "boolean", values: [], description: "--unmasked" },
     ],
     examples: [
       "browser-flow prepare --run-id demo --fixture synthetic",
@@ -185,8 +192,10 @@ export const COMMANDS = [
     classification: "public",
     description: "End capture and persist sanitized artifacts from the observer daemon.",
     usage: "browser-flow done --run-id <id> [--capture-screenshot final]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--capture-screenshot final"],
+    options: [
+      { name: "--capture-screenshot", required: false, type: "enum", values: ["final"], description: "--capture-screenshot final" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow done --run-id demo", "browser-flow done --run-id demo --capture-screenshot final"],
     sideEffects: ["Signals the observer daemon, writes sanitized artifacts, and creates review/task previews."],
     artifacts: ["Writes sanitized events, network summary, page evidence, security report, and review/task files under artifacts/runs/<id>/."],
@@ -201,7 +210,9 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Re-run sanitize and security scan on a captured raw event log without opening a browser.",
     usage: "browser-flow replay --run-id <id>",
-    requiredOptions: ["--run-id <id>"],
+    options: [
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow replay --run-id demo"],
     sideEffects: ["Rewrites sanitized capture artifacts and updates control status to replayed when control.json exists."],
     artifacts: ["Reads raw-events.jsonl, raw-page-evidence.json, and manifest.json; writes sanitized artifacts and security.json."],
@@ -216,7 +227,9 @@ export const COMMANDS = [
     classification: "public",
     description: "Compile sanitized capture artifacts into workflow, path, recipe, and analysis outputs.",
     usage: "browser-flow analyze --run-id <id>",
-    requiredOptions: ["--run-id <id>"],
+    options: [
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow analyze --run-id demo"],
     sideEffects: ["Writes analysis artifacts and may activate variable-extraction task state for new paths."],
     artifacts: ["Reads sanitized capture artifacts; writes workflow.json, path.yaml, recipe.yaml, page-node knowledge, and task files."],
@@ -231,7 +244,9 @@ export const COMMANDS = [
     classification: "public",
     description: "Generate a runnable CDP-direct runner from workflow.json.",
     usage: "browser-flow generate --run-id <id>",
-    requiredOptions: ["--run-id <id>"],
+    options: [
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow generate --run-id demo"],
     sideEffects: ["Writes generated runner files and may upsert registry metadata through existing gates."],
     artifacts: ["Reads workflow.json; writes generated/runner.mjs and generated support artifacts."],
@@ -247,8 +262,15 @@ export const COMMANDS = [
     classification: "public",
     description: "Replay the generated workflow and enforce truthfulness gates [--summary] [--screenshots off|final|steps|both].",
     usage: "browser-flow verify --run-id <id> [--headless] [--summary] [--screenshots off|final|steps|both] [--first|--repeat] [--attach <port>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--headless", "--summary", "--screenshots off|final|steps|both", "--first", "--repeat", "--attach <port>"],
+    options: [
+      { name: "--attach", value: "port", required: false, type: "string", values: [], description: "--attach <port>" },
+      { name: "--first", required: false, type: "boolean", values: [], description: "--first" },
+      { name: "--headless", required: false, type: "boolean", values: [], description: "--headless" },
+      { name: "--repeat", required: false, type: "boolean", values: [], description: "--repeat" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+      { name: "--screenshots", required: false, type: "enum", values: ["off","final","steps","both"], description: "--screenshots off|final|steps|both" },
+      { name: "--summary", required: false, type: "boolean", values: [], description: "--summary" },
+    ],
     examples: [
       "browser-flow verify --run-id demo --headless",
       "browser-flow verify --run-id demo --summary",
@@ -269,8 +291,12 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Inspect, confirm, resume, or interactively resolve variable-extraction task state.",
     usage: "browser-flow vars --run-id <id> [--confirm | --interactive | --resume]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--confirm", "--interactive", "--resume"],
+    options: [
+      { name: "--confirm", required: false, type: "boolean", values: [], description: "--confirm" },
+      { name: "--interactive", required: false, type: "boolean", values: [], description: "--interactive" },
+      { name: "--resume", required: false, type: "boolean", values: [], description: "--resume" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow vars --run-id demo", "browser-flow vars --run-id demo --confirm"],
     sideEffects: ["Read-only by default; confirm/interactive/resume update task state and may update workflow input bindings."],
     artifacts: ["Reads and writes artifacts/runs/<id>/tasks/* and workflow.json."],
@@ -285,8 +311,11 @@ export const COMMANDS = [
     classification: "public",
     description: "Bind workflow inputs and emit a new derived run with its own generated runner.",
     usage: "browser-flow run --run-id <id> [--bind input.name=value ...] [--dry-run]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--bind input.name=value", "--dry-run"],
+    options: [
+      { name: "--bind", required: false, type: "string", values: [], description: "--bind input.name=value" },
+      { name: "--dry-run", required: false, type: "boolean", values: [], description: "--dry-run" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow run --run-id demo --bind input.query=weather", "browser-flow run --run-id demo --bind input.query=weather --dry-run"],
     sideEffects: ["Creates a bind-derived run directory, writes bound workflow/manifest, and generates a new runner unless --dry-run is set."],
     artifacts: ["Reads source workflow.json and manifest.json; writes artifacts/runs/<id>-bind-<hash>/."],
@@ -301,8 +330,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Gather verifiable-spec answers for missing workflow verification context.",
     usage: "browser-flow spec --run-id <id> [--request <text>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--request <text>"],
+    options: [
+      { name: "--request", value: "text", required: false, type: "string", values: [], description: "--request <text>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow spec --run-id demo --request \"requires login\""],
     sideEffects: ["May prompt on stdin and writes verify-spec answers for the run."],
     artifacts: ["Reads knowledge/verify-spec/questions.base.json and optional override; writes artifacts/runs/<id>/verify-spec.json."],
@@ -318,8 +349,15 @@ export const COMMANDS = [
     classification: "public",
     description: "Emit/apply scrape setup or reuse a durable extractor config for page data.",
     usage: "browser-flow extract --run-id <id> --step <n> [--schema <path> | --apply <scrape-result.json> | --reuse [--paged]] [--data-mode extract|mixed]",
-    requiredOptions: ["--run-id <id>", "--step <n> with emit/reuse; --schema <path> for setup emit or --apply/--reuse mode"],
-    optionalOptions: ["--schema <path>", "--apply <scrape-result.json>", "--reuse", "--paged", "--data-mode extract|mixed"],
+    options: [
+      { name: "--apply", value: "scrape-result.json", required: false, type: "string", values: [], description: "--apply <scrape-result.json>" },
+      { name: "--data-mode", required: false, type: "enum", values: ["extract","mixed"], description: "--data-mode extract|mixed" },
+      { name: "--paged", required: false, type: "boolean", values: [], description: "--paged" },
+      { name: "--reuse", required: false, type: "boolean", values: [], description: "--reuse" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+      { name: "--schema", value: "path", required: false, type: "string", values: [], description: "--schema <path>" },
+      { name: "--step", value: "n", required: false, type: "string", values: [], description: "--step <n> with emit/reuse; --schema <path> for setup emit or --apply/--reuse mode" },
+    ],
     examples: [
       "browser-flow extract --run-id demo --step 2 --schema schema.json",
       "browser-flow extract --run-id demo --step 2 --apply scrape-result.json",
@@ -340,8 +378,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Emit or apply a repaired extractor config after extraction drift.",
     usage: "browser-flow extract-heal --run-id <id> [--apply <extract-heal-result.json>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <extract-heal-result.json>"],
+    options: [
+      { name: "--apply", value: "extract-heal-result.json", required: false, type: "string", values: [], description: "--apply <extract-heal-result.json>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow extract-heal --run-id demo", "browser-flow extract-heal --run-id demo --apply extract-heal-result.json"],
     sideEffects: ["Read-only without --apply; --apply can force-update durable scraping knowledge and write extraction results."],
     artifacts: ["Reads extract-heal-request.json; may write knowledge/scraping/<pageKey>/ and extract-result.json."],
@@ -356,8 +396,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Brief/apply ambiguous capture-noise review.",
     usage: "browser-flow review-noise --run-id <id> [--apply <capture-noise-result.json>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <capture-noise-result.json>"],
+    options: [
+      { name: "--apply", value: "capture-noise-result.json", required: false, type: "string", values: [], description: "--apply <capture-noise-result.json>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow review-noise --run-id demo", "browser-flow review-noise --run-id demo --apply capture-noise-result.json"],
     sideEffects: ["Read-only briefing without --apply; --apply writes capture-noise decisions."],
     artifacts: ["Reads capture-noise preview and sanitized events; writes capture-noise-result.json."],
@@ -372,8 +414,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Brief/apply same-name semantic locator intent review.",
     usage: "browser-flow review-locator-intent --run-id <id> [--apply <locator-intent-result.json>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <locator-intent-result.json>"],
+    options: [
+      { name: "--apply", value: "locator-intent-result.json", required: false, type: "string", values: [], description: "--apply <locator-intent-result.json>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: [
       "browser-flow review-locator-intent --run-id demo",
       "browser-flow review-locator-intent --run-id demo --apply locator-intent-result.json"
@@ -391,8 +435,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Brief/apply state/intent route review.",
     usage: "browser-flow review-route-intent --run-id <id> [--apply <route-intent-result.json>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <route-intent-result.json>"],
+    options: [
+      { name: "--apply", value: "route-intent-result.json", required: false, type: "string", values: [], description: "--apply <route-intent-result.json>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow review-route-intent --run-id demo", "browser-flow review-route-intent --run-id demo --apply route-intent-result.json"],
     sideEffects: ["Read-only briefing without --apply; --apply writes route intent decisions."],
     artifacts: ["Reads route-intent preview; writes route-intent-result.json."],
@@ -407,17 +453,17 @@ export const COMMANDS = [
     classification: "public",
     description: "Save a replay-verified external workflow after explicit approval.",
     usage: "browser-flow promote --run-id <id> --scope external --origins <csv> --auth-mode <mode> --profile-mode <mode> --privacy-level <level> --screenshots off|allowed --data-mode route|extract|mixed [--dry-run]",
-    requiredOptions: [
-      "--run-id <id>",
-      "--scope external",
-      "--origins <csv>",
-      "--auth-mode none|login-required|keychain-session|attach|persistent-profile",
-      "--profile-mode ephemeral|named-profile|attached-browser",
-      "--privacy-level minimal|profile|full",
-      "--screenshots off|allowed",
-      "--data-mode route|extract|mixed"
+    options: [
+      { name: "--auth-mode", required: true, type: "enum", values: ["none","login-required","keychain-session","attach","persistent-profile"], description: "--auth-mode none|login-required|keychain-session|attach|persistent-profile" },
+      { name: "--data-mode", required: true, type: "enum", values: ["route","extract","mixed"], description: "--data-mode route|extract|mixed" },
+      { name: "--dry-run", required: false, type: "boolean", values: [], description: "--dry-run" },
+      { name: "--origins", value: "csv", required: true, type: "string", values: [], description: "--origins <csv>" },
+      { name: "--privacy-level", required: true, type: "enum", values: ["minimal","profile","full"], description: "--privacy-level minimal|profile|full" },
+      { name: "--profile-mode", required: true, type: "enum", values: ["ephemeral","named-profile","attached-browser"], description: "--profile-mode ephemeral|named-profile|attached-browser" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+      { name: "--scope", required: true, type: "enum", values: ["external"], description: "--scope external" },
+      { name: "--screenshots", required: true, type: "enum", values: ["off","allowed"], description: "--screenshots off|allowed" },
     ],
-    optionalOptions: ["--dry-run"],
     examples: [
       "browser-flow promote --run-id demo --scope external --origins https://example.com --auth-mode none --profile-mode ephemeral --privacy-level minimal --screenshots off --data-mode route"
     ],
@@ -435,8 +481,11 @@ export const COMMANDS = [
     classification: "public",
     description: "Compose a primary workflow request into episodic compose artifacts.",
     usage: "browser-flow compose --run-id <id> --request <task> [--dry-run]",
-    requiredOptions: ["--run-id <id>", "--request <task>"],
-    optionalOptions: ["--dry-run"],
+    options: [
+      { name: "--dry-run", required: false, type: "boolean", values: [], description: "--dry-run" },
+      { name: "--request", value: "task", required: true, type: "string", values: [], description: "--request <task>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow compose --run-id demo --request \"repeat this without the last item\"", "browser-flow compose --run-id demo --request \"repeat this without the last item\" --dry-run"],
     sideEffects: ["Creates a derived run, writes compose request/plan/summary artifacts, generates and verifies the derived workflow unless --dry-run is set."],
     artifacts: ["Reads source workflow.json; writes artifacts/runs/<derivedId>/compose/*, workflow.json, runner.mjs, verification reports."],
@@ -451,8 +500,13 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Link a teardown into the main workflow from a recorded cleanup or selector search.",
     usage: "browser-flow teardown --run-id <id> (--record <cleanupRunId> | --search [--intent <text>] [--page <pageKey>])",
-    requiredOptions: ["--run-id <id>", "--record <cleanupRunId> or --search"],
-    optionalOptions: ["--intent <text>", "--page <pageKey>"],
+    options: [
+      { name: "--intent", value: "text", required: false, type: "string", values: [], description: "--intent <text>" },
+      { name: "--page", value: "pageKey", required: false, type: "string", values: [], description: "--page <pageKey>" },
+      { name: "--record", value: "cleanupRunId", required: false, type: "string", values: [], description: "--record <cleanupRunId> or --search" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+      { name: "--search", required: false, type: "boolean", values: [], description: "--record <cleanupRunId> or --search" },
+    ],
     examples: [
       "browser-flow teardown --run-id demo --record demo-cleanup",
       "browser-flow teardown --run-id demo --search --intent delete --page synthetic/synthetic/result"
@@ -470,8 +524,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Delete dangling artifacts from a held or aborted run through its teardown recipe.",
     usage: "browser-flow cleanup --run-id <id> [--dry-run]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--dry-run"],
+    options: [
+      { name: "--dry-run", required: false, type: "boolean", values: [], description: "--dry-run" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow cleanup --run-id demo", "browser-flow cleanup --run-id demo --dry-run"],
     sideEffects: ["Runs the generated runner in cleanup-only mode when dangling artifacts exist unless --dry-run is set."],
     artifacts: ["Reads state-journal.jsonl and generated/runner.mjs; may update verification cleanup fields."],
@@ -486,8 +542,11 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Apply a heal-result to a held run, clean up, and perform one bounded re-run.",
     usage: "browser-flow heal --run-id <id> [--apply <heal-result.json>] [--headless]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <heal-result.json>", "--headless"],
+    options: [
+      { name: "--apply", value: "heal-result.json", required: false, type: "string", values: [], description: "--apply <heal-result.json>" },
+      { name: "--headless", required: false, type: "boolean", values: [], description: "--headless" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow heal --run-id demo", "browser-flow heal --run-id demo --apply heal-result.json --headless"],
     sideEffects: ["Read-only without --apply; --apply updates workflow locators, regenerates, cleans up, and verifies once."],
     artifacts: ["Reads heal-request.json and workflow.json; may write workflow.json, runner.mjs, verification/security reports."],
@@ -502,8 +561,11 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Apply scoring-agent weight overrides after an ambiguous locator drift hold.",
     usage: "browser-flow score --run-id <id> [--apply <scoring-result.json>] [--headless]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <scoring-result.json>", "--headless"],
+    options: [
+      { name: "--apply", value: "scoring-result.json", required: false, type: "string", values: [], description: "--apply <scoring-result.json>" },
+      { name: "--headless", required: false, type: "boolean", values: [], description: "--headless" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow score --run-id demo", "browser-flow score --run-id demo --apply scoring-result.json"],
     sideEffects: ["Read-only without --apply; --apply updates workflow locator weights, learned scoring knowledge, regenerates, cleans up, and verifies once."],
     artifacts: ["Reads scoring-request.json; may write workflow.json, knowledge/analyzer/semantic/scoring-patterns.json, runner.mjs, reports."],
@@ -518,8 +580,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Emit/apply scope-agent identity regions for signal-poor locators before verification.",
     usage: "browser-flow scope --run-id <id> [--apply <scope-result.json>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <scope-result.json>"],
+    options: [
+      { name: "--apply", value: "scope-result.json", required: false, type: "string", values: [], description: "--apply <scope-result.json>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow scope --run-id demo", "browser-flow scope --run-id demo --apply scope-result.json"],
     sideEffects: ["Writes scope request without --apply; --apply updates workflow locators and regenerates when applied."],
     artifacts: ["Reads workflow.json; writes scope-request.json or workflow.json plus runner.mjs."],
@@ -534,8 +598,10 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Emit/apply stateful-affordance reveal semantics for ambiguous reveal controls.",
     usage: "browser-flow reveal --run-id <id> [--apply <reveal-result.json>]",
-    requiredOptions: ["--run-id <id>"],
-    optionalOptions: ["--apply <reveal-result.json>"],
+    options: [
+      { name: "--apply", value: "reveal-result.json", required: false, type: "string", values: [], description: "--apply <reveal-result.json>" },
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
     examples: ["browser-flow reveal --run-id demo", "browser-flow reveal --run-id demo --apply reveal-result.json"],
     sideEffects: ["Writes reveal request without --apply; --apply updates workflow action semantics and regenerates when applied."],
     artifacts: ["Reads workflow.json; writes reveal-request.json or workflow.json plus runner.mjs."],
@@ -550,8 +616,11 @@ export const COMMANDS = [
     classification: "advanced",
     description: "Discover a fixture page's navigable graph with read-only bounded BFS.",
     usage: "browser-flow explore --fixture <fixture> [--depth <n>] [--headless]",
-    requiredOptions: ["--fixture <fixture>"],
-    optionalOptions: ["--depth <n>", "--headless"],
+    options: [
+      { name: "--depth", value: "n", required: false, type: "string", values: [], description: "--depth <n>" },
+      { name: "--fixture", value: "fixture", required: true, type: "string", values: [], description: "--fixture <fixture>" },
+      { name: "--headless", required: false, type: "boolean", values: [], description: "--headless" },
+    ],
     examples: ["browser-flow explore --fixture explore --depth 2"],
     sideEffects: ["Starts a fixture server and temporary Chrome; writes explored edges to page-node knowledge."],
     artifacts: ["Writes knowledge/pages/<pageKey>/explored-edges.json."],
@@ -649,16 +718,12 @@ JSON errors:
 };
 
 /**
- * @param {Omit<CommandMetadata, "requiredOptions" | "optionalOptions" | "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating"> & Partial<Pick<CommandMetadata, "requiredOptions" | "optionalOptions" | "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating">>} input
+ * @param {Omit<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating"> & Partial<Pick<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating">>} input
  * @returns {CommandMetadata}
  */
 function command(input) {
   const readOnly = input.sideEffects?.every((item) => /^Read-only\b/i.test(item)) ?? false;
-  const requiredOptions = input.requiredOptions ?? [];
-  const optionalOptions = input.optionalOptions ?? [];
-  const normalized = {
-    requiredOptions: [],
-    optionalOptions: [],
+  return {
     options: [],
     examples: [],
     sideEffects: ["None."],
@@ -671,71 +736,8 @@ function command(input) {
     registryMutation: "none",
     safetyImplications: [],
     mutating: !readOnly,
-    ...input,
-    requiredOptions,
-    optionalOptions
+    ...input
   };
-  return {
-    ...normalized,
-    options: input.options ?? deriveOptions(requiredOptions, optionalOptions)
-  };
-}
-
-/**
- * @param {string[]} requiredOptions
- * @param {string[]} optionalOptions
- * @returns {CommandOption[]}
- */
-function deriveOptions(requiredOptions, optionalOptions) {
-  /** @type {Map<string, CommandOption>} */
-  const out = new Map();
-  for (const text of requiredOptions) {
-    for (const option of parseOptionText(text, isStrictRequiredOption(text))) {
-      out.set(option.name, option);
-    }
-  }
-  for (const text of optionalOptions) {
-    for (const option of parseOptionText(text, false)) {
-      const existing = out.get(option.name);
-      out.set(option.name, existing ? { ...option, required: existing.required || option.required } : option);
-    }
-  }
-  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * @param {string} text
- * @returns {boolean}
- */
-function isStrictRequiredOption(text) {
-  return !/\bor\b|\bwith\b|;|\(|\)/i.test(text);
-}
-
-/**
- * @param {string} text
- * @param {boolean} required
- * @returns {CommandOption[]}
- */
-function parseOptionText(text, required) {
-  /** @type {CommandOption[]} */
-  const options = [];
-  const pattern = /(--[A-Za-z0-9-]+)(?:\s+((?:<[^>]+>)|(?:[A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)|(?:[A-Za-z0-9_-]+)))?/g;
-  let match;
-  while ((match = pattern.exec(text)) !== null) {
-    const name = match[1];
-    const rawValue = match[2] ?? "";
-    const enumValues = rawValue.includes("|") ? rawValue.split("|") : [];
-    const placeholder = rawValue.startsWith("<") && rawValue.endsWith(">") ? rawValue.slice(1, -1) : undefined;
-    options.push({
-      name,
-      ...(placeholder ? { value: placeholder } : {}),
-      required,
-      type: enumValues.length > 0 ? "enum" : rawValue ? "string" : "boolean",
-      values: enumValues,
-      description: text
-    });
-  }
-  return options;
 }
 
 /**
@@ -784,6 +786,8 @@ export function renderTopLevelHelp(repoRoot) {
 export function renderCommandHelp(name) {
   const entry = COMMANDS_BY_NAME.get(name);
   if (!entry) return null;
+  const requiredOptionRows = entry.options.filter((option) => option.required);
+  const optionalOptionRows = entry.options.filter((option) => !option.required);
   return [
     `browser-flow ${entry.name}`,
     "",
@@ -795,10 +799,10 @@ export function renderCommandHelp(name) {
     `  ${entry.usage}`,
     "",
     "Required options:",
-    formatList(entry.requiredOptions),
+    formatOptions(requiredOptionRows),
     "",
     "Optional options:",
-    formatList(entry.optionalOptions),
+    formatOptions(optionalOptionRows),
     "",
     "Common examples:",
     formatList(entry.examples),
@@ -886,8 +890,6 @@ function commandSchema(entry) {
     group: entry.group,
     classification: entry.classification,
     usage: entry.usage,
-    requiredOptions: entry.requiredOptions,
-    optionalOptions: entry.optionalOptions,
     options: entry.options,
     defaults: entry.defaults,
     outputMode: entry.output,
@@ -907,6 +909,18 @@ function commandSchema(entry) {
 function formatList(items) {
   if (items.length === 0) return "  None.";
   return items.map((item) => `  - ${item}`).join("\n");
+}
+
+/**
+ * @param {CommandOption[]} options
+ */
+function formatOptions(options) {
+  if (options.length === 0) return "  None.";
+  return options.map((option) => {
+    const value = option.value ? ` <${option.value}>` : "";
+    const values = option.values.length > 0 ? ` (${option.values.join("|")})` : "";
+    return `  - ${option.name}${value}${values}: ${option.description}`;
+  }).join("\n");
 }
 
 function formatExitCodeRows() {

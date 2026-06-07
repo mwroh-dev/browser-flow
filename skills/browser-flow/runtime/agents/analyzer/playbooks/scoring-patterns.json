@@ -1,0 +1,38 @@
+[
+  {
+    "id": "nav-tab",
+    "match": {
+      "structuralKeyIncludes": "nav>",
+      "hasHref": true
+    },
+    "signalWeights": {
+      "href": 1.5,
+      "structuralKey": 0.5
+    },
+    "note": "Tab/nav links: the URL path is the decisive, stable signal; the DOM-path structuralKey is brittle across skins/renders."
+  },
+  {
+    "id": "form-input",
+    "match": {
+      "roleIn": ["textbox", "combobox", "spinbutton"]
+    },
+    "signalWeights": {
+      "name": 1.5,
+      "neighborTexts": 1.5,
+      "cleanId": 1.5
+    },
+    "note": "Form fields: label/accessible-name and neighbor (label) text dominate identity."
+  },
+  {
+    "id": "content-link",
+    "match": {
+      "roleIn": ["link"],
+      "hasHref": true
+    },
+    "signalWeights": {
+      "href": 1.5,
+      "neighborTexts": 1.5
+    },
+    "note": "Body links: URL plus surrounding text disambiguate same-named links."
+  }
+]
