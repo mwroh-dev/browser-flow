@@ -80,7 +80,7 @@ function rewriteSurfaceText(text) {
  * @param {string} name
  */
 function shouldSkipPath(name) {
-  return SKIP_BASENAMES.has(name) || name === "node_modules" || name === "artifacts" || /^release-shipping-/.test(name);
+  return SKIP_BASENAMES.has(name) || name === "node_modules" || name === "artifacts" || name === "publish";
 }
 
 /**
@@ -159,8 +159,6 @@ export function assembleBrowserFlowPackage(repoRoot, outputDir) {
   copyTree(resolve(root, "agents"), resolve(packageRoot, "agents"), { rewriteText: true });
   copyTree(resolve(root, "scripts"), resolve(packageRoot, "runtime/scripts"));
   copyTree(resolve(root, "knowledge"), resolve(packageRoot, "runtime/knowledge"));
-  copyTree(resolve(root, "tests"), resolve(packageRoot, "runtime/tests"));
-  copyTree(resolve(root, "AGENTS.md"), resolve(packageRoot, "runtime/AGENTS.md"), { rewriteText: true });
   copyTree(
     resolve(surfaceRoot, "package/scripts/validate-skill.mjs"),
     resolve(packageRoot, "scripts/validate-skill.mjs")

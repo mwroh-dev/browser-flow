@@ -1,9 +1,0 @@
-node_modules/
-.DS_Store
-artifacts/
-coverage/
-*.log
-profiles/
-_temp/
-.claude/
-.pii-identities
