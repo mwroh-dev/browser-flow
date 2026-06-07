@@ -40,6 +40,7 @@ const requiredRuntimeFiles = [
   "scripts/lib/schemas.mjs",
   "scripts/lib/schema-versions.mjs",
   "scripts/lib/cli-metadata.mjs",
+  "scripts/lib/cli-registry.mjs",
   "scripts/lib/config.mjs",
   "package.json",
   "package-lock.json"
@@ -408,17 +409,12 @@ if (!/review-locator-intent --run-id <id>/i.test(promptText) || !/review-locator
 if (!/action text[\s\S]*semantic|semantic[\s\S]*action text/i.test(promptText) || !/same-name counts/i.test(promptText)) {
   throw new Error("prompt.md must require full locator_intent_review candidate briefing instead of opaque all-candidate prompts.");
 }
-if (!/import\s+\{\s*reviewNoiseCommand\s*\}\s+from\s+"\.\/commands\/review-noise\.mjs"/.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs must import reviewNoiseCommand.");
+const runtimeCliRegistryText = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-registry.mjs"), "utf8");
+if (!/"review-noise":\s*async \(\) =>[\s\S]*reviewNoiseCommand/.test(runtimeCliRegistryText)) {
+  throw new Error("runtime/scripts/lib/cli-registry.mjs must lazy-load reviewNoiseCommand.");
 }
-if (!/if \(command === "review-noise"\)/.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs must dispatch the review-noise command.");
-}
-if (!/import\s+\{\s*reviewLocatorIntentCommand\s*\}\s+from\s+"\.\/commands\/review-locator-intent\.mjs"/.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs must import reviewLocatorIntentCommand.");
-}
-if (!/if \(command === "review-locator-intent"\)/.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs must dispatch the review-locator-intent command.");
+if (!/"review-locator-intent":\s*async \(\) =>[\s\S]*reviewLocatorIntentCommand/.test(runtimeCliRegistryText)) {
+  throw new Error("runtime/scripts/lib/cli-registry.mjs must lazy-load reviewLocatorIntentCommand.");
 }
 
 const composeHeader = "## Compose — v1 boundary";
@@ -446,14 +442,14 @@ if (
 ) {
   throw new Error("compose section must keep safety enforcement in code and validator wording.");
 }
-if (!/import\s+\{\s*composeCommand\s*\}\s+from\s+"\.\/commands\/compose\.mjs"/.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs must import composeCommand.");
+if (!/compose:\s*async \(\) =>[\s\S]*composeCommand/.test(runtimeCliRegistryText)) {
+  throw new Error("runtime/scripts/lib/cli-registry.mjs must lazy-load composeCommand.");
 }
 if (!/name:\s*"compose"[\s\S]*description:\s*"Compose a primary workflow request/i.test(runtimeCliMetadataText)) {
   throw new Error("runtime/scripts/lib/cli-metadata.mjs help metadata must document the compose command.");
 }
-if (!/if \(command === "compose"\)/.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs must dispatch the compose command.");
+if (!/COMMAND_REGISTRY/.test(runtimeCliMainText) && !/resolveRegistryEntry/.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs must dispatch through the command registry.");
 }
 if (!/composeRequestPath/.test(runtimeConfigText) || !/composeSummaryPath/.test(runtimeConfigText)) {
   throw new Error("runtime/scripts/lib/config.mjs must expose compose artifact paths.");

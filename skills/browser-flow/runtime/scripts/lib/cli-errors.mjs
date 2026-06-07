@@ -85,12 +85,82 @@ export const EXIT_CODE_DEFINITIONS = [
 
 const EXIT_CODE_BY_CODE = new Map(EXIT_CODE_DEFINITIONS.map((entry) => [entry.code, entry]));
 
+export class CliError extends Error {
+  /**
+   * @param {string} code
+   * @param {string} message
+   * @param {string[]} [suggestedCommands]
+   */
+  constructor(code, message, suggestedCommands = []) {
+    super(message);
+    this.name = "CliError";
+    this.code = code;
+    const definition = EXIT_CODE_BY_CODE.get(code) ?? EXIT_CODE_BY_CODE.get("runtime_error");
+    this.exitCode = definition?.status ?? 1;
+    this.recoverable = definition?.recoverable ?? false;
+    this.suggestedCommands = suggestedCommands;
+  }
+}
+
+export function invalidUsage(message, suggestedCommands = ["browser-flow help"]) {
+  return new CliError("invalid_usage", message, suggestedCommands);
+}
+
+export function missingRequiredOption(message, command = "") {
+  return new CliError(
+    "missing_required_option",
+    message,
+    command ? [`browser-flow ${command} --help`] : ["browser-flow help"]
+  );
+}
+
+export function missingRunArtifact(message, command = "") {
+  return new CliError(
+    "missing_run_artifact",
+    message,
+    command ? [`browser-flow ${command} --help`, "browser-flow help artifacts"] : ["browser-flow help artifacts"]
+  );
+}
+
+export function dependencyPreflightFailure(message) {
+  return new CliError("dependency_preflight_failure", message, ["npm ci --omit=dev --ignore-scripts --no-audit --no-fund", "browser-flow doctor"]);
+}
+
+export function safetyOrPermissionBlock(message) {
+  return new CliError("safety_or_permission_block", message, ["browser-flow help safety"]);
+}
+
+export function checkpointRequired(message, command = "") {
+  return new CliError("checkpoint_required", message, checkpointSuggestions(message, command));
+}
+
+export function verificationNotGreen(message, command = "") {
+  return new CliError(
+    "verification_not_green",
+    message,
+    command ? [`browser-flow ${command} --help`, "browser-flow help safety"] : ["browser-flow help safety"]
+  );
+}
+
+export function diagnosticNotPromotable(message) {
+  return new CliError("diagnostic_not_promotable", message, ["browser-flow promote --help", "browser-flow help safety"]);
+}
+
 /**
  * @param {unknown} error
  * @param {CliErrorContext} [context]
  * @returns {CliFailure}
  */
 export function classifyCliError(error, context = {}) {
+  if (error instanceof CliError) {
+    return {
+      code: error.code,
+      exitCode: error.exitCode,
+      message: error.message,
+      recoverable: error.recoverable,
+      suggestedCommands: error.suggestedCommands
+    };
+  }
   const message = errorMessage(error);
   const command = normalizeCommand(context.command);
   const code = classifyMessage(message);

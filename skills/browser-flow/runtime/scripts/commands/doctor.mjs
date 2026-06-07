@@ -20,6 +20,7 @@ import { getDefaultChromePath, getPagesRoot, getPaths, getRepoRoot, pagePaths } 
 import { readJson } from "../lib/fs.mjs";
 import { getStringOption } from "../lib/args.mjs";
 import { checkRuntimeDependencyPreflight } from "../lib/runtime-preflight.mjs";
+import { SUPPORT_SCOPE } from "../lib/cli-metadata.mjs";
 
 const REQUIRED_PACKAGES = ["chrome-remote-interface", "parse5", "cheerio", "zod"];
 
@@ -152,13 +153,13 @@ export function pageNodeStatus(pageKey) {
  * `bf doctor [--page-key <key>]` — survey page-node staleness.
  *
  * @param {Record<string, string | boolean>} options
- * @returns {{ pageNodes: PageNodeStatus[], preflight: { ok: boolean, checks: PreflightCheck[] } }}
+ * @returns {{ pageNodes: PageNodeStatus[], platformSupport: { target: string, current: string, supported: boolean, description: string }, preflight: { ok: boolean, checks: PreflightCheck[] } }}
  */
 export function doctorCommand(options) {
   const specificKey = getStringOption(options, "page-key", undefined);
   const keys = specificKey ? [specificKey] : listPageKeys();
   const pageNodes = keys.map(pageNodeStatus);
-  return { pageNodes, preflight: buildPreflight(options) };
+  return { pageNodes, platformSupport: platformSupport(), preflight: buildPreflight(options) };
 }
 
 /**
@@ -167,6 +168,7 @@ export function doctorCommand(options) {
  */
 function buildPreflight(options) {
   const checks = [
+    platformSupportCheck(),
     nodeCheck(),
     npmCheck(),
     runtimeDependencyCheck(),
@@ -178,6 +180,30 @@ function buildPreflight(options) {
   return {
     ok: checks.every((check) => check.status !== "fail"),
     checks
+  };
+}
+
+function platformSupport() {
+  return {
+    target: SUPPORT_SCOPE.target,
+    current: process.platform,
+    supported: process.platform === "darwin",
+    description: SUPPORT_SCOPE.description
+  };
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function platformSupportCheck() {
+  const support = platformSupport();
+  return {
+    name: "platformSupport",
+    ok: true,
+    status: support.supported ? "ok" : "warning",
+    detail: support.supported
+      ? "macOS happy path target is active"
+      : `${SUPPORT_SCOPE.description} Current platform ${process.platform} is best-effort.`
   };
 }
 

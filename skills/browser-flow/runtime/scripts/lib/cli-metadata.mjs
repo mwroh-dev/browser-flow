@@ -1,5 +1,10 @@
 import { EXIT_CODE_DEFINITIONS } from "./cli-errors.mjs";
 
+export const SUPPORT_SCOPE = {
+  target: "macos",
+  description: "Supported target: macOS happy path. Windows/Linux behavior is best-effort defensive compatibility, not a release support guarantee."
+};
+
 export const COMMAND_GROUPS = [
   { id: "setup", title: "Setup / diagnostics" },
   { id: "capture", title: "Capture" },
@@ -15,12 +20,22 @@ export const COMMAND_GROUPS = [
 /**
  * @typedef {{
  *   name: string,
+ *   value?: string,
+ *   required: boolean,
+ *   type: "string" | "boolean" | "enum",
+ *   values: string[],
+ *   description: string
+ * }} CommandOption
+ *
+ * @typedef {{
+ *   name: string,
  *   group: string,
  *   classification: "public" | "advanced" | "internal",
  *   description: string,
  *   usage: string,
  *   requiredOptions: string[],
  *   optionalOptions: string[],
+ *   options: CommandOption[],
  *   examples: string[],
  *   sideEffects: string[],
  *   artifacts: string[],
@@ -37,6 +52,49 @@ export const COMMAND_GROUPS = [
 
 /** @type {CommandMetadata[]} */
 export const COMMANDS = [
+  command({
+    name: "help",
+    group: "setup",
+    classification: "public",
+    description: "Print top-level, topic, or command help.",
+    usage: "browser-flow help [workflows|examples|safety|artifacts|exit-codes|<command>]",
+    examples: ["browser-flow help", "browser-flow help safety", "browser-flow verify --help"],
+    sideEffects: ["Read-only; writes help text to stdout."],
+    artifacts: ["None."],
+    related: ["schema", "capabilities"],
+    output: "text",
+    mutating: false,
+    safetyImplications: ["Help is static and does not inspect browser state or artifacts."]
+  }),
+  command({
+    name: "schema",
+    group: "setup",
+    classification: "public",
+    description: "Print the machine-readable browser-flow CLI schema.",
+    usage: "browser-flow schema [command <name>]",
+    optionalOptions: ["command <name> positional arguments"],
+    examples: ["browser-flow schema", "browser-flow schema command verify"],
+    sideEffects: ["Read-only; writes JSON schema to stdout."],
+    artifacts: ["None."],
+    related: ["capabilities", "completion"],
+    output: "json",
+    mutating: false,
+    safetyImplications: ["Schema is static and intended for agent planning."]
+  }),
+  command({
+    name: "capabilities",
+    group: "setup",
+    classification: "public",
+    description: "Print compact agent-readable CLI capabilities.",
+    usage: "browser-flow capabilities",
+    examples: ["browser-flow capabilities"],
+    sideEffects: ["Read-only; writes JSON capabilities to stdout."],
+    artifacts: ["None."],
+    related: ["schema", "help"],
+    output: "json",
+    mutating: false,
+    safetyImplications: ["Capabilities are static and intended for agent planning."]
+  }),
   command({
     name: "doctor",
     group: "setup",
@@ -591,14 +649,17 @@ JSON errors:
 };
 
 /**
- * @param {Omit<CommandMetadata, "requiredOptions" | "optionalOptions" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating"> & Partial<Pick<CommandMetadata, "requiredOptions" | "optionalOptions" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating">>} input
+ * @param {Omit<CommandMetadata, "requiredOptions" | "optionalOptions" | "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating"> & Partial<Pick<CommandMetadata, "requiredOptions" | "optionalOptions" | "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating">>} input
  * @returns {CommandMetadata}
  */
 function command(input) {
   const readOnly = input.sideEffects?.every((item) => /^Read-only\b/i.test(item)) ?? false;
-  return {
+  const requiredOptions = input.requiredOptions ?? [];
+  const optionalOptions = input.optionalOptions ?? [];
+  const normalized = {
     requiredOptions: [],
     optionalOptions: [],
+    options: [],
     examples: [],
     sideEffects: ["None."],
     artifacts: ["None."],
@@ -610,8 +671,71 @@ function command(input) {
     registryMutation: "none",
     safetyImplications: [],
     mutating: !readOnly,
-    ...input
+    ...input,
+    requiredOptions,
+    optionalOptions
   };
+  return {
+    ...normalized,
+    options: input.options ?? deriveOptions(requiredOptions, optionalOptions)
+  };
+}
+
+/**
+ * @param {string[]} requiredOptions
+ * @param {string[]} optionalOptions
+ * @returns {CommandOption[]}
+ */
+function deriveOptions(requiredOptions, optionalOptions) {
+  /** @type {Map<string, CommandOption>} */
+  const out = new Map();
+  for (const text of requiredOptions) {
+    for (const option of parseOptionText(text, isStrictRequiredOption(text))) {
+      out.set(option.name, option);
+    }
+  }
+  for (const text of optionalOptions) {
+    for (const option of parseOptionText(text, false)) {
+      const existing = out.get(option.name);
+      out.set(option.name, existing ? { ...option, required: existing.required || option.required } : option);
+    }
+  }
+  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isStrictRequiredOption(text) {
+  return !/\bor\b|\bwith\b|;|\(|\)/i.test(text);
+}
+
+/**
+ * @param {string} text
+ * @param {boolean} required
+ * @returns {CommandOption[]}
+ */
+function parseOptionText(text, required) {
+  /** @type {CommandOption[]} */
+  const options = [];
+  const pattern = /(--[A-Za-z0-9-]+)(?:\s+((?:<[^>]+>)|(?:[A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)|(?:[A-Za-z0-9_-]+)))?/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const name = match[1];
+    const rawValue = match[2] ?? "";
+    const enumValues = rawValue.includes("|") ? rawValue.split("|") : [];
+    const placeholder = rawValue.startsWith("<") && rawValue.endsWith(">") ? rawValue.slice(1, -1) : undefined;
+    options.push({
+      name,
+      ...(placeholder ? { value: placeholder } : {}),
+      required,
+      type: enumValues.length > 0 ? "enum" : rawValue ? "string" : "boolean",
+      values: enumValues,
+      description: text
+    });
+  }
+  return options;
 }
 
 /**
@@ -622,6 +746,7 @@ export function renderTopLevelHelp(repoRoot) {
     "browser-flow",
     "",
     "Project-local browser workflow compiler for local fixtures and explicitly approved real websites.",
+    SUPPORT_SCOPE.description,
     "",
     "Usage:",
     "  browser-flow <command> [options]",
@@ -701,8 +826,10 @@ export function renderTopicHelp(topic) {
 export function buildCapabilities() {
   return {
     ok: true,
+    agentContract: true,
     schemaVersion: CLI_SCHEMA_VERSION,
     product: "browser-flow",
+    supportScope: SUPPORT_SCOPE,
     description: "Project-local browser workflow compiler CLI.",
     exitCodes: EXIT_CODE_DEFINITIONS,
     commands: COMMANDS.map((entry) => ({
@@ -710,6 +837,7 @@ export function buildCapabilities() {
       group: entry.group,
       classification: entry.classification,
       description: entry.description,
+      options: entry.options,
       outputMode: entry.output,
       mutating: entry.mutating,
       registryMutation: entry.registryMutation,
@@ -722,8 +850,10 @@ export function buildCapabilities() {
 export function buildSchema() {
   return {
     ok: true,
+    agentContract: true,
     schemaVersion: CLI_SCHEMA_VERSION,
     product: "browser-flow",
+    supportScope: SUPPORT_SCOPE,
     exitCodes: EXIT_CODE_DEFINITIONS,
     topics: Object.keys(HELP_TOPICS),
     commands: COMMANDS.map(commandSchema)
@@ -738,8 +868,10 @@ export function buildCommandSchema(name) {
   if (!entry) return null;
   return {
     ok: true,
+    agentContract: true,
     schemaVersion: CLI_SCHEMA_VERSION,
     product: "browser-flow",
+    supportScope: SUPPORT_SCOPE,
     command: commandSchema(entry)
   };
 }
@@ -756,6 +888,7 @@ function commandSchema(entry) {
     usage: entry.usage,
     requiredOptions: entry.requiredOptions,
     optionalOptions: entry.optionalOptions,
+    options: entry.options,
     defaults: entry.defaults,
     outputMode: entry.output,
     sideEffects: entry.sideEffects,

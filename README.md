@@ -10,6 +10,14 @@ It is intended for repeatable browser work, workflow composition, and local
 agent pipelines. It is not intended for bypassing site controls, saving user
 secrets into files, or bulk scraping.
 
+Current support target: macOS happy path. Windows and Linux paths keep
+defensive compatibility guards where practical, but this released CLI does not
+claim full cross-platform support.
+
+The CLI is designed first as an agent contract surface: stable JSON, stable
+exit codes, machine-readable schema/capabilities, dry-run previews, and explicit
+artifact paths take priority over decorative terminal output.
+
 ## Install
 
 From this released checkout:

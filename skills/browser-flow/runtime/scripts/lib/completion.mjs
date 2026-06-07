@@ -25,33 +25,40 @@ function commandNames() {
 function optionNames() {
   const options = new Set(["--help", "--json"]);
   for (const command of COMMANDS) {
-    for (const option of [...command.requiredOptions, ...command.optionalOptions]) {
-      const matches = option.match(/--[A-Za-z0-9-]+/g);
-      if (matches) {
-        for (const match of matches) {
-          options.add(match);
-        }
-      }
+    for (const option of command.options) {
+      options.add(option.name);
     }
   }
   return [...options].sort();
 }
 
+function optionNamesFor(command) {
+  return [...new Set(["--help", "--json", ...command.options.map((option) => option.name)])].sort();
+}
+
 function renderBashCompletion() {
   const commands = commandNames().join(" ");
   const options = optionNames().join(" ");
+  const commandCases = COMMANDS.map((command) => {
+    const commandOptions = optionNamesFor(command).join(" ");
+    return `    ${command.name}) options="${commandOptions}" ;;`;
+  });
   return [
     "# browser-flow bash completion",
     "_browser_flow() {",
-    "  local cur",
+    "  local cur cmd options",
     "  COMPREPLY=()",
     "  cur=\"${COMP_WORDS[COMP_CWORD]}\"",
+    "  cmd=\"${COMP_WORDS[1]}\"",
     "  local commands=\"" + commands + "\"",
-    "  local options=\"" + options + "\"",
+    "  options=\"" + options + "\"",
     "  if [[ ${COMP_CWORD} -eq 1 ]]; then",
     "    COMPREPLY=( $(compgen -W \"${commands}\" -- \"$cur\") )",
     "    return 0",
     "  fi",
+    "  case \"$cmd\" in",
+    ...commandCases,
+    "  esac",
     "  COMPREPLY=( $(compgen -W \"${options}\" -- \"$cur\") )",
     "}",
     "complete -F _browser_flow browser-flow"
@@ -64,6 +71,14 @@ function renderZshCompletion() {
     .sort((a, b) => commandNames().indexOf(a.name) - commandNames().indexOf(b.name))
     .map((entry) => `    '${entry.name}:${entry.description.replace(/:/g, "\\:").replace(/'/g, "'\\''")}'`);
   const optionEntries = optionNames().map((option) => `    '${option}'`);
+  const enumEntries = [];
+  for (const command of COMMANDS) {
+    for (const option of command.options) {
+      if (option.type === "enum" && option.values.length > 0) {
+        enumEntries.push(`    '${command.name} ${option.name}:${option.values.join(" ")}'`);
+      }
+    }
+  }
   return [
     "#compdef browser-flow",
     "",
@@ -76,6 +91,8 @@ function renderZshCompletion() {
     "  options=(",
     ...optionEntries,
     "  )",
+    "  # enum value hints",
+    ...enumEntries,
     "  _arguments \\",
     "    '1:command:->command' \\",
     "    '*::option:->option'",
@@ -97,6 +114,16 @@ function renderFishCompletion() {
   ];
   for (const option of optionNames()) {
     lines.push(`complete -c browser-flow -l ${option.slice(2)}`);
+  }
+  for (const command of COMMANDS) {
+    for (const option of optionNamesFor(command)) {
+      lines.push(`complete -c browser-flow -n '__fish_seen_subcommand_from ${command.name}' -l ${option.slice(2)}`);
+    }
+    for (const option of command.options) {
+      if (option.type === "enum" && option.values.length > 0) {
+        lines.push(`complete -c browser-flow -n '__fish_seen_subcommand_from ${command.name}; and __fish_seen_argument -l ${option.name.slice(2)}' -a '${option.values.join(" ")}'`);
+      }
+    }
   }
   return lines.join("\n");
 }

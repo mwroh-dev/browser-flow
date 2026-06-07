@@ -25,6 +25,9 @@ dependencies into the target project, and does not inject or rewrite the host
 project's root `CLAUDE.md`. The installed package prepares its own dependencies
 inside the installed package's `runtime/` directory on first use.
 
+Current support target is the macOS happy path. Windows and Linux checks are
+best-effort defensive compatibility only, not a full release support guarantee.
+
 After installing, restart Codex from the target project so it discovers the
 new project-local skill. For Claude installs, restart Claude Code so it
 discovers the new project-local command.
