@@ -197,7 +197,7 @@ function nodeCheck() {
  * @returns {PreflightCheck}
  */
 function npmCheck() {
-  const result = spawnSync("npm", ["--version"], { encoding: "utf8" });
+  const result = spawnSync("npm", ["--version"], { encoding: "utf8", shell: process.platform === "win32" });
   if (result.error) {
     return {
       name: "npm",
@@ -366,11 +366,12 @@ function securityBaselineCheck() {
 
 /**
  * @param {string | undefined} chromePath
+ * @param {() => string | undefined} [defaultChromePath]
  * @returns {PreflightCheck}
  */
-function chromeCheck(chromePath) {
-  const path = chromePath || getDefaultChromePath();
-  if (!existsSync(path)) {
+export function chromeCheck(chromePath, defaultChromePath = getDefaultChromePath) {
+  const path = chromePath || defaultChromePath();
+  if (typeof path !== "string" || !existsSync(path)) {
     return {
       name: "chrome",
       ok: false,

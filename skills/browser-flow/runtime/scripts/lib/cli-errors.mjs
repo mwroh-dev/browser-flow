@@ -91,7 +91,7 @@ const EXIT_CODE_BY_CODE = new Map(EXIT_CODE_DEFINITIONS.map((entry) => [entry.co
  * @returns {CliFailure}
  */
 export function classifyCliError(error, context = {}) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   const command = normalizeCommand(context.command);
   const code = classifyMessage(message);
   const definition = EXIT_CODE_BY_CODE.get(code) ?? EXIT_CODE_BY_CODE.get("runtime_error");
@@ -111,6 +111,19 @@ export function classifyCliError(error, context = {}) {
     recoverable: definition.recoverable,
     suggestedCommands: suggestedCommandsFor(definition.code, message, command)
   };
+}
+
+/**
+ * @param {unknown} error
+ * @returns {string}
+ */
+function errorMessage(error) {
+  if (error instanceof Error) return String(error.message ?? "");
+  if (error && typeof error === "object" && "message" in error) {
+    const message = /** @type {{ message?: unknown }} */ (error).message;
+    if (typeof message === "string") return message;
+  }
+  return String(error);
 }
 
 /**
