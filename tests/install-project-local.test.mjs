@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -57,6 +57,44 @@ test("claude install writes command and private skill paths that point at the co
       cwd: privateRoot,
       stdio: "pipe"
     });
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+test("claude command renderer rewrites only path tokens and normalizes line endings", () => {
+  const target = makeTarget();
+  try {
+    const sourceSkillDir = resolve(target, "source-skill");
+    const commandPath = resolve(target, "command.md");
+    mkdirSync(sourceSkillDir, { recursive: true });
+    writeFileSync(
+      resolve(sourceSkillDir, "prompt.md"),
+      [
+        "runtime/scripts/cli.mjs",
+        "technical-skills/reference.md",
+        "sub-agents/example.md",
+        "references/security-policy.md"
+      ].join("\r\n")
+    );
+
+    execFileSync(
+      process.execPath,
+      [
+        resolve(repoRoot, "scripts/install/render-claude-command.mjs"),
+        sourceSkillDir,
+        commandPath,
+        ".claude/browser-flow"
+      ],
+      { cwd: repoRoot, stdio: "pipe" }
+    );
+
+    const commandText = readFileSync(commandPath, "utf8");
+    assert.match(commandText, /\.claude\/browser-flow\/runtime\/scripts\/cli\.mjs/);
+    assert.match(commandText, /\.claude\/browser-flow\/references\/security-policy\.md/);
+    assert.match(commandText, /technical-skills\/reference\.md/);
+    assert.match(commandText, /sub-agents\/example\.md/);
+    assert.equal(commandText.includes("\r\n"), false);
   } finally {
     rmSync(target, { recursive: true, force: true });
   }

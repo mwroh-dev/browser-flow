@@ -14,12 +14,13 @@ const promptPath = resolve(sourceSkillDir, "prompt.md");
 const commandPath = resolve(outputPath);
 
 const prompt = readFileSync(promptPath, "utf8")
-  .replaceAll("runtime/scripts/cli.mjs", `${packageMountPath}/runtime/scripts/cli.mjs`)
-  .replaceAll("runtime/knowledge/", `${packageMountPath}/runtime/knowledge/`)
-  .replaceAll("runtime/artifacts/", `${packageMountPath}/runtime/artifacts/`)
-  .replaceAll("agents/", `${packageMountPath}/agents/`)
-  .replaceAll("skills/", `${packageMountPath}/skills/`)
-  .replaceAll("references/", `${packageMountPath}/references/`);
+  .replace(/\r\n/g, "\n")
+  .replace(/(?<![\w-])runtime\/scripts\/cli\.mjs/g, `${packageMountPath}/runtime/scripts/cli.mjs`)
+  .replace(/(?<![\w-])runtime\/knowledge\//g, `${packageMountPath}/runtime/knowledge/`)
+  .replace(/(?<![\w-])runtime\/artifacts\//g, `${packageMountPath}/runtime/artifacts/`)
+  .replace(/(?<![\w-])agents\//g, `${packageMountPath}/agents/`)
+  .replace(/(?<![\w-])skills\//g, `${packageMountPath}/skills/`)
+  .replace(/(?<![\w-])references\//g, `${packageMountPath}/references/`);
 
 mkdirSync(dirname(commandPath), { recursive: true });
 writeFileSync(commandPath, `# Browser Flow\n\nUse this command to run the browser-flow workflow.\n\n${prompt}`);

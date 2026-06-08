@@ -15,9 +15,12 @@ function runCli(args) {
 
 test("help exits successfully and reports the runtime root", () => {
   const result = runCli(["help"]);
+  const normalizedStdout = result.stdout.replace(/\\/g, "/");
+  const normalizedRoot = runtimeRoot.replace(/\\/g, "/");
+  const escapedRoot = normalizedRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, new RegExp(runtimeRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(normalizedStdout, new RegExp(escapedRoot));
   assert.equal(result.stderr, "");
 });
 
