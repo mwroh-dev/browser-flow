@@ -61,6 +61,7 @@ export function runCommand(options, argv = process.argv) {
   if (!runId) {
     throw new Error("run requires --run-id.");
   }
+  const dryRun = options["dry-run"] === true;
   const originalPaths = getRunPaths(runId);
   if (!existsSync(originalPaths.workflowJsonPath)) {
     throw new Error(`Source workflow not found at ${originalPaths.workflowJsonPath}. Run \`bf analyze --run-id ${runId}\` first.`);
@@ -74,6 +75,20 @@ export function runCommand(options, argv = process.argv) {
   // 새 runId 명명 — 결정적 short hash 으로 같은 bindings 는 idempotent.
   const hash = bindingsShortHash(bindings);
   const newRunId = `${runId}-bind-${hash}`;
+  const previewPaths = getRunPaths(newRunId);
+  if (dryRun) {
+    return {
+      ok: true,
+      dryRun: true,
+      sourceRunId: runId,
+      newRunId,
+      newRunRoot: previewPaths.runRoot,
+      bindings,
+      bindingsHash: hash,
+      wouldWrite: [previewPaths.manifestPath, previewPaths.workflowJsonPath, previewPaths.runnerPath],
+      registryMutation: "none"
+    };
+  }
   const newPaths = ensureRunDirs(newRunId);
 
   // 새 manifest — sourceRunId + bindings 메타로 출처 기록.

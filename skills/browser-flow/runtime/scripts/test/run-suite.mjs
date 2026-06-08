@@ -27,16 +27,24 @@ const e2eListPath = resolve(repoRoot, "scripts", "test", "e2e-suite.json");
 
 /**
  * @param {string[]} argv
- * @returns {{ suite: string, retries: number }}
+ * @returns {{ suite: string, retries: number, testsRoot: string, e2eListPath: string, setup: boolean, batchSize: number }}
  */
 function parseArgs(argv) {
   let suite = "unit";
   let retries = 0;
+  let testsRootOverride = testsRoot;
+  let e2eListPathOverride = e2eListPath;
+  let setup = true;
+  let batchSize = 1;
   for (const arg of argv) {
     if (arg.startsWith("--suite=")) suite = arg.slice("--suite=".length);
     else if (arg.startsWith("--retries=")) retries = Number(arg.slice("--retries=".length)) || 0;
+    else if (arg.startsWith("--tests-root=")) testsRootOverride = resolve(arg.slice("--tests-root=".length));
+    else if (arg.startsWith("--e2e-list=")) e2eListPathOverride = resolve(arg.slice("--e2e-list=".length));
+    else if (arg === "--no-setup") setup = false;
+    else if (arg.startsWith("--batch-size=")) batchSize = Number(arg.slice("--batch-size=".length)) || 0;
   }
-  return { suite, retries };
+  return { suite, retries, testsRoot: testsRootOverride, e2eListPath: e2eListPathOverride, setup, batchSize };
 }
 
 /**
@@ -47,6 +55,7 @@ function parseArgs(argv) {
 function walkTests(dir) {
   /** @type {string[]} */
   const out = [];
+  if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
     const abs = resolve(dir, name);
     if (statSync(abs).isDirectory()) out.push(...walkTests(abs));
@@ -55,10 +64,13 @@ function walkTests(dir) {
   return out;
 }
 
-/** @returns {string[]} */
-function nodeTestFlags() {
+/**
+ * @param {boolean} setup
+ * @returns {string[]}
+ */
+function nodeTestFlags(setup) {
   return [
-    "--import=./tests/_setup.mjs",
+    ...(setup ? ["--import=./tests/_setup.mjs"] : []),
     "--test",
     "--test-concurrency=1",
     "--test-timeout=120000",
@@ -71,12 +83,48 @@ function nodeTestFlags() {
  * @param {string[]} files
  * @returns {number}
  */
-function runLive(files) {
-  const res = spawnSync(process.execPath, [...nodeTestFlags(), ...files], {
+function runLive(files, setup) {
+  const res = spawnSync(process.execPath, [...nodeTestFlags(setup), ...files], {
     cwd: repoRoot,
     stdio: "inherit"
   });
   return res.status ?? 1;
+}
+
+/**
+ * @param {string[]} files
+ * @param {number} size
+ * @returns {string[][]}
+ */
+function batchFiles(files, size) {
+  if (!Number.isFinite(size) || size <= 0 || files.length <= size) return [files];
+  /** @type {string[][]} */
+  const batches = [];
+  for (let index = 0; index < files.length; index += size) {
+    batches.push(files.slice(index, index + size));
+  }
+  return batches;
+}
+
+/**
+ * Run suites as deterministic batches. A single node:test process with many
+ * release-tree files can spend excessive time in runner output bookkeeping,
+ * which makes the release smoke lane harder to trust.
+ * @param {string[]} files
+ * @param {boolean} setup
+ * @param {number} batchSize
+ * @returns {number}
+ */
+function runLiveBatched(files, setup, batchSize) {
+  const batches = batchFiles(files, batchSize);
+  for (let index = 0; index < batches.length; index += 1) {
+    if (batches.length > 1) {
+      process.stdout.write(`[run-suite] batch ${index + 1}/${batches.length} (${batches[index].length} file(s))\n`);
+    }
+    const code = runLive(batches[index], setup);
+    if (code !== 0) return code;
+  }
+  return 0;
 }
 
 /**
@@ -85,8 +133,8 @@ function runLive(files) {
  * @param {string[]} files
  * @returns {{ code: number, failedFiles: string[] }}
  */
-function runCapturing(files) {
-  const res = spawnSync(process.execPath, [...nodeTestFlags(), ...files], {
+function runCapturing(files, setup) {
+  const res = spawnSync(process.execPath, [...nodeTestFlags(setup), ...files], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["inherit", "pipe", "inherit"]
@@ -106,19 +154,20 @@ function runCapturing(files) {
 }
 
 function main() {
-  const { suite, retries } = parseArgs(process.argv.slice(2));
+  const { suite, retries, testsRoot, e2eListPath, setup, batchSize } = parseArgs(process.argv.slice(2));
 
   const all = walkTests(testsRoot).sort();
 
   /** @type {{ files: string[] }} */
   const e2eDoc = JSON.parse(readFileSync(e2eListPath, "utf8"));
   const e2eList = e2eDoc.files;
-  const stale = e2eList.filter((file) => !existsSync(resolve(repoRoot, file)));
-  if (stale.length > 0) {
+  const stale = e2eList.filter((file) => !existsSync(resolve(repoRoot, file)) && !existsSync(resolve(testsRoot, file)));
+  if (stale.length > 0 && suite !== "unit") {
     process.stderr.write(`[run-suite] e2e-suite.json lists missing file(s):\n  ${stale.join("\n  ")}\n`);
     process.exit(2);
   }
-  const e2eSet = new Set(e2eList);
+  const discoveredE2e = all.filter((file) => file.startsWith("tests/e2e/") || file.includes("/tests/e2e/"));
+  const e2eSet = new Set([...e2eList.filter((file) => !stale.includes(file)), ...discoveredE2e]);
   const unit = all.filter((file) => !e2eSet.has(file));
   const e2e = all.filter((file) => e2eSet.has(file));
 
@@ -135,7 +184,7 @@ function main() {
 
   process.stdout.write(
     `[run-suite] suite=${suite} → ${files.length} file(s) ` +
-    `(unit=${unit.length}, e2e=${e2e.length}, total=${all.length}, retries=${retries})\n`
+    `(unit=${unit.length}, e2e=${e2e.length}, total=${all.length}, retries=${retries}, batchSize=${batchSize})\n`
   );
 
   if (files.length === 0) {
@@ -145,7 +194,7 @@ function main() {
   }
 
   if (retries <= 0) {
-    process.exit(runLive(files));
+    process.exit(runLiveBatched(files, setup, batchSize));
     return;
   }
 
@@ -157,7 +206,7 @@ function main() {
     if (attempt > 0) {
       process.stdout.write(`[run-suite] retry ${attempt}/${retries} on ${toRun.length} failed file(s)\n`);
     }
-    const { code, failedFiles } = runCapturing(toRun);
+    const { code, failedFiles } = runCapturing(toRun, setup);
     lastCode = code;
     if (code === 0) {
       process.stdout.write(`[run-suite] PASS${attempt > 0 ? ` (after ${attempt} retry/retries)` : ""}\n`);

@@ -9,6 +9,13 @@ import {
   checkRuntimeDependencyPreflight,
   formatRuntimePreflightError
 } from "./lib/runtime-preflight.mjs";
+import {
+  classifyCliError,
+  dependencyPreflightFailure,
+  formatHumanCliError,
+  formatJsonCliError,
+  isJsonErrorMode
+} from "./lib/cli-errors.mjs";
 
 const runtimeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const requiredPackages = ["chrome-remote-interface", "parse5", "cheerio", "zod"];
@@ -36,7 +43,7 @@ function ensureRuntimeDependencies() {
 
   const preflight = checkRuntimeDependencyPreflight(runtimeRoot);
   if (!preflight.ok) {
-    throw new Error(formatRuntimePreflightError(runtimeRoot, preflight));
+    throw dependencyPreflightFailure(formatRuntimePreflightError(runtimeRoot, preflight));
   }
 
   process.stderr.write("[browser-flow] preparing bundled runtime dependencies...\n");
@@ -52,7 +59,7 @@ function ensureRuntimeDependencies() {
 
   if (result.status !== 0) {
     const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    throw new Error(formatDependencyInstallError(runtimeRoot, detail));
+    throw dependencyPreflightFailure(formatDependencyInstallError(runtimeRoot, detail));
   }
 }
 
@@ -61,9 +68,13 @@ async function runCli() {
     ensureRuntimeDependencies();
     await import("./cli-main.mjs");
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
+    const failure = classifyCliError(error, { command: process.argv[2] });
+    process.exitCode = failure.exitCode;
+    if (isJsonErrorMode(process.argv)) {
+      process.stdout.write(`${JSON.stringify(formatJsonCliError(failure), null, 2)}\n`);
+    } else {
+      process.stderr.write(formatHumanCliError(failure));
+    }
   }
 }
 
