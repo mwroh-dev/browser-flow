@@ -4,6 +4,11 @@ This reference owns the core capture -> analyze -> generate -> verify phase
 entry contract. `prompt.md` loads this file; it does not restate the phase
 instructions.
 
+This file must stay limited to phase order, projected views, callables, and
+completion traces. Move policy text to the canonical `references/*` owner,
+phase-specific judgment to `agents/*/AGENT.md`, and design rationale to a review
+or documentation artifact.
+
 ## Phase Entry State Contract
 
 | Pre-condition | Action | Trace |

@@ -16,6 +16,9 @@ Run a guideline review when a change touches:
 - `skills/*/SKILL.md`
 - runtime command or artifact contracts that affect model instructions
 
+Use `phase-contract-checklist.md` whenever a change touches workflow phase
+order, projected views, phase callables, or phase transition traces.
+
 Recommended review output lives in
 `review-guidelines/reports/review-report-template.md`.
 

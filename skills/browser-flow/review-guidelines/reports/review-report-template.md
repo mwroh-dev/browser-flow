@@ -13,6 +13,7 @@ runtime artifact and is not an automated build gate.
 | Checklist | Result | Notes |
 | --- | --- | --- |
 | Prompt entry boundary | PASS / FAIL / N/A | |
+| Phase contract scope | PASS / FAIL / N/A | |
 | Agent ownership | PASS / FAIL / N/A | |
 | Reference policy ownership | PASS / FAIL / N/A | |
 | Checkpoint contract structure | PASS / FAIL / N/A | |
