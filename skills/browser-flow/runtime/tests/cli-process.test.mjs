@@ -27,9 +27,11 @@ test("help exits successfully and reports the runtime root", () => {
 test("unknown commands fail closed with guidance", () => {
   const result = runCli(["not-a-command"]);
 
-  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.equal(result.status, 2, result.stderr || result.stdout);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /Command "not-a-command" is not implemented yet/);
+  assert.match(result.stderr, /browser-flow error: invalid_usage/);
+  assert.match(result.stderr, /Unknown command "not-a-command"\./);
+  assert.match(result.stderr, /browser-flow help/);
 });
 
 test("doctor returns machine-readable status", () => {

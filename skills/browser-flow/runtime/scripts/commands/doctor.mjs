@@ -11,13 +11,18 @@
 // - decompress before hashing (sha256 of gunzipped bytes)
 // - read-only: doctor surfaces signal, does not mutate state
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
-import { getPagesRoot, pagePaths } from "../lib/config.mjs";
+import { getDefaultChromePath, getPagesRoot, getPaths, getRepoRoot, pagePaths } from "../lib/config.mjs";
 import { readJson } from "../lib/fs.mjs";
 import { getStringOption } from "../lib/args.mjs";
+import { checkRuntimeDependencyPreflight } from "../lib/runtime-preflight.mjs";
+import { SUPPORT_SCOPE } from "../lib/cli-metadata.mjs";
+
+const REQUIRED_PACKAGES = ["chrome-remote-interface", "parse5", "cheerio", "zod"];
 
 /**
  * Walk getPagesRoot() recursively and return all pageKeys (any
@@ -79,6 +84,14 @@ function hashSnapshot(absolutePath) {
  *   firstSnapshot?: string,
  *   latestSnapshot?: string
  * }} PageNodeStatus
+ *
+ * @typedef {{
+ *   name: string,
+ *   ok: boolean,
+ *   status: "ok" | "warning" | "fail",
+ *   detail: string,
+ *   path?: string
+ * }} PreflightCheck
  */
 
 /**
@@ -140,11 +153,278 @@ export function pageNodeStatus(pageKey) {
  * `bf doctor [--page-key <key>]` — survey page-node staleness.
  *
  * @param {Record<string, string | boolean>} options
- * @returns {{ pageNodes: PageNodeStatus[] }}
+ * @returns {{ pageNodes: PageNodeStatus[], platformSupport: { target: string, current: string, supported: boolean, description: string }, preflight: { ok: boolean, checks: PreflightCheck[] } }}
  */
 export function doctorCommand(options) {
   const specificKey = getStringOption(options, "page-key", undefined);
   const keys = specificKey ? [specificKey] : listPageKeys();
   const pageNodes = keys.map(pageNodeStatus);
-  return { pageNodes };
+  return { pageNodes, platformSupport: platformSupport(), preflight: buildPreflight(options) };
+}
+
+/**
+ * @param {Record<string, string | boolean>} options
+ * @returns {{ ok: boolean, checks: PreflightCheck[] }}
+ */
+function buildPreflight(options) {
+  const checks = [
+    platformSupportCheck(),
+    nodeCheck(),
+    npmCheck(),
+    runtimeDependencyCheck(),
+    artifactDirectoriesCheck(),
+    registryCheck(),
+    securityBaselineCheck(),
+    chromeCheck(getStringOption(options, "chrome-path", getDefaultChromePath()))
+  ];
+  return {
+    ok: checks.every((check) => check.status !== "fail"),
+    checks
+  };
+}
+
+function platformSupport() {
+  return {
+    target: SUPPORT_SCOPE.target,
+    current: process.platform,
+    supported: process.platform === "darwin",
+    description: SUPPORT_SCOPE.description
+  };
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function platformSupportCheck() {
+  const support = platformSupport();
+  return {
+    name: "platformSupport",
+    ok: true,
+    status: support.supported ? "ok" : "warning",
+    detail: support.supported
+      ? "macOS happy path target is active"
+      : `${SUPPORT_SCOPE.description} Current platform ${process.platform} is best-effort.`
+  };
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function nodeCheck() {
+  return {
+    name: "node",
+    ok: true,
+    status: "ok",
+    detail: `Node ${process.version}`
+  };
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function npmCheck() {
+  const result = spawnSync("npm", ["--version"], { encoding: "utf8", shell: process.platform === "win32" });
+  if (result.error) {
+    return {
+      name: "npm",
+      ok: false,
+      status: "fail",
+      detail: result.error.message
+    };
+  }
+  if (result.status !== 0) {
+    return {
+      name: "npm",
+      ok: false,
+      status: "fail",
+      detail: (result.stderr || result.stdout || "npm --version failed").trim()
+    };
+  }
+  return {
+    name: "npm",
+    ok: true,
+    status: "ok",
+    detail: `npm ${(result.stdout || "").trim()}`
+  };
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function runtimeDependencyCheck() {
+  const repoRoot = getRepoRoot();
+  const missing = REQUIRED_PACKAGES.filter((name) => {
+    let dir = repoRoot;
+    while (true) {
+      if (existsSync(resolve(dir, "node_modules", name, "package.json"))) {
+        return false;
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return true;
+  });
+  const writable = checkRuntimeDependencyPreflight(repoRoot);
+  if (!writable.ok) {
+    return {
+      name: "runtimeDependencies",
+      ok: false,
+      status: "fail",
+      detail: writable.detail || "runtime root is not writable",
+      path: repoRoot
+    };
+  }
+  if (missing.length > 0) {
+    return {
+      name: "runtimeDependencies",
+      ok: false,
+      status: "fail",
+      detail: `missing packages: ${missing.join(", ")}`,
+      path: resolve(repoRoot, "node_modules")
+    };
+  }
+  return {
+    name: "runtimeDependencies",
+    ok: true,
+    status: "ok",
+    detail: "required runtime packages are installed",
+    path: resolve(repoRoot, "node_modules")
+  };
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function artifactDirectoriesCheck() {
+  const paths = getPaths();
+  const checks = [
+    directoryWritableStatus(paths.runsRoot),
+    directoryWritableStatus(dirname(paths.registryPath))
+  ];
+  const failed = checks.filter((check) => check.status === "fail");
+  const warnings = checks.filter((check) => check.status === "warning");
+  return {
+    name: "artifactDirectories",
+    ok: failed.length === 0,
+    status: failed.length > 0 ? "fail" : warnings.length > 0 ? "warning" : "ok",
+    detail: checks.map((check) => `${check.path}: ${check.detail}`).join("; ")
+  };
+}
+
+/**
+ * @param {string | undefined} path
+ * @returns {{ path: string, status: "ok" | "warning" | "fail", detail: string }}
+ */
+export function directoryWritableStatus(path) {
+  if (!path) {
+    return { path: "", status: "fail", detail: "path is undefined or empty" };
+  }
+  if (!existsSync(path)) {
+    return { path, status: "warning", detail: "directory does not exist yet" };
+  }
+  try {
+    accessSync(path, constants.R_OK | constants.W_OK);
+    return { path, status: "ok", detail: "readable and writable" };
+  } catch (error) {
+    return {
+      path,
+      status: "fail",
+      detail: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function registryCheck() {
+  const { registryPath } = getPaths();
+  if (!existsSync(registryPath)) {
+    return {
+      name: "registry",
+      ok: true,
+      status: "warning",
+      detail: "registry file does not exist yet",
+      path: registryPath
+    };
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(registryPath, "utf8"));
+    if (!Array.isArray(parsed)) {
+      return {
+        name: "registry",
+        ok: false,
+        status: "fail",
+        detail: "registry JSON must be an array",
+        path: registryPath
+      };
+    }
+    return {
+      name: "registry",
+      ok: true,
+      status: "ok",
+      detail: `${parsed.length} entries readable`,
+      path: registryPath
+    };
+  } catch (error) {
+    return {
+      name: "registry",
+      ok: false,
+      status: "fail",
+      detail: error instanceof Error ? error.message : String(error),
+      path: registryPath
+    };
+  }
+}
+
+/**
+ * @returns {PreflightCheck}
+ */
+function securityBaselineCheck() {
+  const repoRoot = getRepoRoot();
+  const required = [
+    resolve(repoRoot, "scripts", "security", "pii-scan.mjs"),
+    resolve(repoRoot, "scripts", "security", "no-provenance.mjs")
+  ];
+  const missing = required.filter((path) => !existsSync(path));
+  if (missing.length > 0) {
+    return {
+      name: "securityBaseline",
+      ok: false,
+      status: "fail",
+      detail: `missing security scripts: ${missing.join(", ")}`
+    };
+  }
+  return {
+    name: "securityBaseline",
+    ok: true,
+    status: "ok",
+    detail: "security scan entrypoints are present"
+  };
+}
+
+/**
+ * @param {string | undefined} chromePath
+ * @param {() => string | undefined} [defaultChromePath]
+ * @returns {PreflightCheck}
+ */
+export function chromeCheck(chromePath, defaultChromePath = getDefaultChromePath) {
+  const path = chromePath || defaultChromePath();
+  if (typeof path !== "string" || !existsSync(path)) {
+    return {
+      name: "chrome",
+      ok: false,
+      status: "warning",
+      detail: "Chrome path does not exist; set --chrome-path or BROWSER_FLOW_CHROME_PATH before browser phases",
+      path
+    };
+  }
+  return {
+    name: "chrome",
+    ok: true,
+    status: "ok",
+    detail: "Chrome path exists",
+    path
+  };
 }

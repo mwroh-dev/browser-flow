@@ -1,3 +1,5 @@
+import { invalidUsage } from "./cli-errors.mjs";
+
 /**
  * @param {string[]} argv
  * @returns {{ command: string, options: Record<string, string | boolean> }}
@@ -34,6 +36,9 @@ export function getStringOption(options, key, fallback) {
   const value = options[key];
   if (typeof value === "string") {
     return value;
+  }
+  if (value === true) {
+    throw invalidUsage(`invalid --${key} requires a value.`);
   }
   return fallback;
 }
