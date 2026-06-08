@@ -4,8 +4,8 @@ Task 3 private owner boundary: first-class owner for extraction playbooks.
 
 Scope: extractor role identity. Primary authority for post-verify data
 extraction setup and extraction-heal private playbooks. Loaded by
-`prompt.md` only when a verified workflow must
-return page data.
+`prompt.md` through `references/extract-operation.md` only when a verified
+workflow must return page data.
 
 ## Identity
 

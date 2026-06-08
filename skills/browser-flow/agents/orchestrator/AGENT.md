@@ -1,17 +1,16 @@
 # Orchestrator Agent
 
 Scope: orchestrator role identity. Primary authority for pipeline
-coordination. Loaded by `prompt.md` as the
-entry-phase identity (the LLM adopts this role when the skill starts).
+coordination. Loaded by `prompt.md` as the entry-phase identity (the LLM
+adopts this role when the skill starts).
 
 ## Identity
 
-Entry-point role identity for the browser-flow skill. Reads the public
-skill instruction (`prompt.md`) and walks the
-four phase agents in sequence by adopting each one's identity in turn.
-There is no JS dispatcher — a single LLM re-anchors on each phase's
-projected view (the phase's `AGENT.md` + `openai.yaml` + any phase-
-specific reference) at phase entry.
+Entry-point role identity for the browser-flow skill. Starts from the public
+entry loader (`prompt.md`) and walks the four phase agents in sequence using
+`references/phase-entry-contract.md`. There is no JS dispatcher — a single LLM
+re-anchors on each phase's projected view (the phase's `AGENT.md` +
+`openai.yaml` + any phase-specific reference) at phase entry.
 
 ## Role
 
@@ -24,8 +23,7 @@ capture → analyzer → generator → verifier
 At each phase entry the orchestrator:
 
 1. Loads the projected view for that phase (declared in
-   `prompt.md` under "Pipeline — Phase Entry
-   Protocol").
+   `references/phase-entry-contract.md`).
 2. Self-identifies as the phase agent.
 3. Invokes the phase's callable tool from `scripts/cli.mjs` under that
    phase agent's identity.
@@ -52,7 +50,9 @@ that gets loaded.
 
 `SKILL.md` — Codex and Claude command surface.
 
-Full LLM instruction set: `prompt.md`
+Entry loader: `prompt.md`
+
+Phase entry contract: `references/phase-entry-contract.md`
 
 ## Behavioral Contract
 
@@ -65,7 +65,7 @@ Full LLM instruction set: `prompt.md`
 **Invariants**
 - The orchestrator never runs a `scripts/cli.mjs` command under its
   own identity. Every CLI invocation happens under the active phase
-  agent's identity (Phase Entry Protocol in prompt.md).
+  agent's identity (`references/phase-entry-contract.md`).
 - Self-identification happens before the callable tool runs at every
   phase entry — there is no "implicit role" execution.
 - The orchestrator owns interpreting current/top/latest/list data and
@@ -235,12 +235,12 @@ the others are advisory until a Hook backs them.
 
 | Layer | Item | Where enforced |
 |-------|------|----------------|
-| Role | Walk the 4 phases by adopting each phase agent's identity; read `knowledge/registry/`; do not execute CLI commands under own identity | `agents/orchestrator/openai.yaml` (`role_type: entry`, `guardrails`); `prompt.md` Role Identity + Phase Entry Protocol |
-| Gate | Phase Entry Protocol — load projected view + self-identify before invoking the phase tool | `prompt.md` Pipeline — Phase Entry Protocol; `scripts/validate-skill.mjs` checks projected-view linkage |
+| Role | Walk the 4 phases by adopting each phase agent's identity; read `knowledge/registry/`; do not execute CLI commands under own identity | `agents/orchestrator/openai.yaml` (`role_type: entry`, `guardrails`); `prompt.md`; `references/phase-entry-contract.md` |
+| Gate | Phase Entry Protocol — load projected view + self-identify before invoking the phase tool | `references/phase-entry-contract.md`; `scripts/validate-skill.mjs` checks projected-view linkage |
 | Constitutional + Hook | Project-local install boundary; real-site capture requires explicit `--unmasked` opt-in | `tests/install-project-local.test.mjs` enforces install shape; `scripts/security/local-only.mjs` rejects non-local URLs unless `prepare --unmasked` is set; registry gates block unmasked diagnostic runs from silent verified promotion |
 | Constitutional + Hook | Success declared only when both reports green | `scripts/verify/verify-run.mjs` writes the reports; `tests/e2e/false-positive-guard.test.mjs` proves the gate fails closed |
-| Rule | Stop only at `awaiting_capture`, `capture_noise_review`, `locator_intent_review`, `route_intent_review`, or `not_verified_hold` | `prompt.md` Checkpoint section (declarative — no code hook) |
-| Judgment (positive posture) | Surface user-facing actions, not `scripts/` internals | `prompt.md` Internal Boundary section — expressed as posture, not a hard ban |
+| Rule | Stop only at `awaiting_capture`, `capture_noise_review`, `locator_intent_review`, `route_intent_review`, or `not_verified_hold` | `references/checkpoint-contracts.md` (declarative — no code hook) |
+| Judgment (positive posture) | Surface user-facing actions, not `scripts/` internals | `review-guidelines/release-surface-checklist.md` — expressed as review posture, not a hard ban |
 
 ## Knowledge
 

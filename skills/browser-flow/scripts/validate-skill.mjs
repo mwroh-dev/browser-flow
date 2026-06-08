@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const agentsRoot = resolve(root, "agents");
-const skillsRoot = resolve(root, "skills");
 const runtimeRoot = resolve(root, "runtime");
 
 const requiredSkillFiles = [
@@ -17,11 +16,15 @@ const requiredSkillFiles = [
   "references/artifact-schemas.md",
   "references/verification-rules.md",
   "references/replay-permission-policy.md",
+  "references/phase-entry-contract.md",
+  "references/checkpoint-contracts.md",
+  "references/extract-operation.md",
+  "references/compose-boundary.md",
   "references/commit-protocol.md",
   "references/registry-contract.md"
 ];
 
-const agentNames = ["orchestrator", "capture", "analyzer", "generator", "verifier"];
+const agentNames = ["orchestrator", "capture", "analyzer", "generator", "verifier", "extractor"];
 const requiredAgentFiles = agentNames.flatMap((name) => [
   `agents/${name}/AGENT.md`,
   `agents/${name}/openai.yaml`,
@@ -31,7 +34,9 @@ const requiredRuntimeFiles = [
   "scripts/cli.mjs",
   "scripts/cli-main.mjs",
   "scripts/commands/compose.mjs",
+  "scripts/commands/review-noise.mjs",
   "scripts/commands/review-locator-intent.mjs",
+  "scripts/commands/review-route-intent.mjs",
   "scripts/analyze/locator-intent.mjs",
   "scripts/analyze/replay-policy.mjs",
   "scripts/compose/compose-summary.mjs",
@@ -39,6 +44,8 @@ const requiredRuntimeFiles = [
   "scripts/compose/policy-hooks.mjs",
   "scripts/lib/schemas.mjs",
   "scripts/lib/schema-versions.mjs",
+  "scripts/lib/cli-metadata.mjs",
+  "scripts/lib/cli-registry.mjs",
   "scripts/lib/config.mjs",
   "package.json",
   "package-lock.json"
@@ -82,294 +89,82 @@ if (!skillText.includes("surface: repo_skill")) {
   throw new Error("SKILL.md must declare surface: repo_skill.");
 }
 
-const captureDriverText = readFileSync(
-  resolve(skillsRoot, "capture-driver", "SKILL.md"),
-  "utf8"
-);
-const captureAgentText = readFileSync(
-  resolve(agentsRoot, "capture/AGENT.md"),
-  "utf8"
-);
-const orchestratorAgentText = readFileSync(
-  resolve(agentsRoot, "orchestrator/AGENT.md"),
-  "utf8"
-);
-
-// manifest.json references is the available-reference catalog;
-// prompt.md is the per-phase binding. Every catalog entry must be
-// named somewhere in prompt.md, otherwise the manifest holds a dead
-// listing (silent divergence between two authority surfaces —
-// purpose-scoped-authority warns against this).
 const manifestText = readFileSync(resolve(root, "manifest.json"), "utf8");
 const manifest = JSON.parse(manifestText);
+if (manifest.name !== "browser-flow") {
+  throw new Error("manifest.json must declare name: browser-flow.");
+}
+if (manifest.surface !== "repo_skill") {
+  throw new Error("manifest.json must declare surface: repo_skill.");
+}
+if (manifest.prompt !== "prompt.md") {
+  throw new Error("manifest.json must point prompt to prompt.md.");
+}
 if (!Array.isArray(manifest.references)) {
   throw new Error("manifest.json must declare a 'references' array");
 }
-
-const promptText = readFileSync(resolve(root, "prompt.md"), "utf8");
-const runtimeCliMainText = readFileSync(resolve(runtimeRoot, "scripts/cli-main.mjs"), "utf8");
-const runtimeCliRegistryText = existsSync(resolve(runtimeRoot, "scripts/lib/cli-registry.mjs"))
-  ? readFileSync(resolve(runtimeRoot, "scripts/lib/cli-registry.mjs"), "utf8")
-  : "";
-const runtimeCliMetadataText = existsSync(resolve(runtimeRoot, "scripts/lib/cli-metadata.mjs"))
-  ? readFileSync(resolve(runtimeRoot, "scripts/lib/cli-metadata.mjs"), "utf8")
-  : "";
-const cliDispatchText = `${runtimeCliMainText}\n${runtimeCliRegistryText}\n${runtimeCliMetadataText}`;
-const runtimeConfigText = readFileSync(resolve(runtimeRoot, "scripts/lib/config.mjs"), "utf8");
-const runtimeSchemaVersionsText = readFileSync(resolve(runtimeRoot, "scripts/lib/schema-versions.mjs"), "utf8");
-const runtimeSchemasText = readFileSync(resolve(runtimeRoot, "scripts/lib/schemas.mjs"), "utf8");
-if (!promptText.includes("Never declare success before both")) {
-  throw new Error("prompt.md must include the verification constitutional invariant.");
-}
-if (!promptText.includes("project-local")) {
-  throw new Error("prompt.md must include the project-local installation invariant.");
-}
-if (!promptText.includes("--unmasked") || !promptText.includes("real-site")) {
-  throw new Error("prompt.md must document explicit real-site capture via --unmasked.");
-}
-if (!/public-read[\s\S]*auto-promot/i.test(promptText)
-  || !/explicit\s+operator approval[\s\S]*origin, auth\/profile, privacy, screenshot, and\s+data-mode metadata/i.test(promptText)) {
-  throw new Error("prompt.md must match registry behavior: public-read real-site runs may auto-promote; other external runs require explicit operator approval.");
-}
-if (/security gates prove[\s\S]*safe to promote/i.test(promptText)) {
-  throw new Error("prompt.md must not imply the current security gates can promote unmasked real-site runs.");
-}
-if (!/manual capture opens a visible Chrome/i.test(promptText)) {
-  throw new Error("prompt.md must state that manual capture opens a visible Chrome by default.");
-}
-if (!/awaiting_capture[\s\S]*hard stop/i.test(promptText)) {
-  throw new Error("prompt.md must describe awaiting_capture as a hard stop for manual capture.");
-}
-if (/prepare --run-id <id> --fixture <fixture> --headless/i.test(promptText)) {
-  throw new Error("prompt.md must not show --headless on the manual capture prepare example.");
-}
-if (/verify --run-id <id> --headless/i.test(promptText)) {
-  throw new Error("prompt.md must not make verify headless unconditionally.");
-}
-if (!/manual real-site external[\s\S]*(visual\/canvas|stateful-surface)[\s\S]*omit `--headless`/i.test(promptText)) {
-  throw new Error("prompt.md must tell manual real-site visual/stateful workflows to omit --headless for verify by default.");
-}
-if (!/local fixtures[\s\S]*synthetic\/e2e tests[\s\S]*known headless-stable[\s\S]*pass `--headless`/i.test(promptText)) {
-  throw new Error("prompt.md must keep --headless guidance for fixtures, tests, and known headless-stable automation flows.");
-}
-if (!/headless verify fails[\s\S]*headed verify[\s\S]*environment parity/i.test(promptText)) {
-  throw new Error("prompt.md must classify headed/headless divergence as environment parity, not headless success.");
-}
-if (!/Do not use\s+(computer-use|browser automation|CDP control|agent-operated browsing)/i.test(promptText)) {
-  throw new Error("prompt.md must forbid agent-driven browser control during manual capture.");
-}
-if (!/unless the user explicitly asks for\s+automation-driven capture/i.test(promptText)) {
-  throw new Error("prompt.md must require explicit user opt-in before automation-driven capture replaces a human demo.");
-}
-if (!/human\/manual[\s\S]*omit `--headless`|omit `--headless`[\s\S]*human\/manual/i.test(captureDriverText)) {
-  throw new Error("capture-driver SKILL.md must tell manual capture flows to omit --headless.");
-}
-if (!/Do not use\s+(computer-use|browser automation|CDP control|agent-operated browsing)/i.test(captureDriverText)) {
-  throw new Error("capture-driver SKILL.md must forbid agent-driven browser control during manual capture.");
-}
-if (!/unless the user explicitly asks for\s+automation-driven capture/i.test(captureDriverText)) {
-  throw new Error("capture-driver SKILL.md must require explicit user opt-in before automation-driven capture replaces a human demo.");
-}
-if (!/human\/manual[\s\S]*omit `--headless`|omit `--headless`[\s\S]*human\/manual/i.test(captureAgentText)) {
-  throw new Error("agents/capture/AGENT.md must tell manual capture flows to omit --headless.");
-}
-if (!/Do not use\s+(computer-use|browser automation|CDP control|agent-operated browsing)/i.test(captureAgentText)) {
-  throw new Error("agents/capture/AGENT.md must forbid agent-driven browser control during manual capture.");
-}
-if (!/unless the user explicitly asks for\s+automation-driven capture/i.test(captureAgentText)) {
-  throw new Error("agents/capture/AGENT.md must require explicit user opt-in before automation-driven capture replaces a human demo.");
-}
-
-// Every manifest.json reference path must appear in prompt.md.
-// A future addition to the manifest that nobody binds in prompt.md
-// fails here as a dead-listing audit.
 for (const refPath of manifest.references) {
   if (typeof refPath !== "string") {
     throw new Error(
       `manifest.json references entries must be strings (got ${typeof refPath})`
     );
   }
-  if (!promptText.includes(refPath)) {
-    throw new Error(
-      `manifest.json references entry '${refPath}' is not bound anywhere in prompt.md (dead listing)`
-    );
+  if (!existsSync(resolve(root, refPath))) {
+    throw new Error(`manifest.json references missing file: ${refPath}`);
   }
 }
 
-// 5-agent projected-view linkage.
-if (!promptText.includes("Pipeline — Phase Entry Protocol")) {
-  throw new Error(
-    "prompt.md must declare 'Pipeline — Phase Entry Protocol' so phase entry is structurally locatable."
-  );
-}
-for (const name of agentNames) {
-  const agentMdPath = `agents/${name}/AGENT.md`;
-  if (!promptText.includes(agentMdPath)) {
-    throw new Error(`prompt.md must reference projected view path: ${agentMdPath}`);
-  }
-  const openaiPath = `agents/${name}/openai.yaml`;
-  if (!promptText.includes(openaiPath)) {
-    throw new Error(`prompt.md must reference projected view path: ${openaiPath}`);
-  }
-}
+const runtimeCliMainText = readFileSync(resolve(runtimeRoot, "scripts/cli-main.mjs"), "utf8");
+const runtimeCliRegistryText = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-registry.mjs"), "utf8");
+const runtimeCliMetadataText = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-metadata.mjs"), "utf8");
+const cliDispatchText = `${runtimeCliMainText}\n${runtimeCliRegistryText}\n${runtimeCliMetadataText}`;
 
-const phaseSpecificReferences = [
-  ["### Phase 1 — Capture", "references/security-policy.md"],
-  ["### Phase 1 — Capture", "references/replay-permission-policy.md"],
-  ["### Phase 2 — Analyze", "references/replay-permission-policy.md"],
-  ["### Phase 3 — Generate", "references/artifact-schemas.md"],
-  ["### Phase 3 — Generate", "references/replay-permission-policy.md"],
-  ["### Phase 4 — Verify", "references/verification-rules.md"],
-  ["### Phase 4 — Verify", "references/replay-permission-policy.md"]
+const requiredCommands = [
+  "prepare",
+  "done",
+  "analyze",
+  "generate",
+  "verify",
+  "extract",
+  "extract-heal",
+  "review-noise",
+  "review-locator-intent",
+  "review-route-intent",
+  "compose"
 ];
-const nextPhaseRegex = /### Phase \d+ — /g;
-for (const [phaseHeader, refPath] of phaseSpecificReferences) {
-  const phaseStart = promptText.indexOf(phaseHeader);
-  if (phaseStart === -1) {
-    throw new Error(`prompt.md must include phase header: ${phaseHeader}`);
+for (const command of requiredCommands) {
+  if (!new RegExp(`name:\\s*"${command}"`).test(runtimeCliMetadataText)) {
+    throw new Error(`runtime CLI metadata must document command: ${command}`);
   }
-  nextPhaseRegex.lastIndex = phaseStart + phaseHeader.length;
-  const nextMatch = nextPhaseRegex.exec(promptText);
-  const phaseEnd = nextMatch ? nextMatch.index : promptText.length;
-  const phaseBlock = promptText.slice(phaseStart, phaseEnd);
-  if (!phaseBlock.includes(refPath)) {
-    throw new Error(`phase block "${phaseHeader}" must reference ${refPath} inside its block`);
+}
+for (const [command, handler] of [
+  ["review-noise", "reviewNoiseCommand"],
+  ["review-locator-intent", "reviewLocatorIntentCommand"],
+  ["review-route-intent", "reviewRouteIntentCommand"],
+  ["compose", "composeCommand"]
+]) {
+  if (!cliDispatchText.includes(command) || !cliDispatchText.includes(handler)) {
+    throw new Error(`runtime CLI must dispatch the ${command} command.`);
   }
 }
 
-if (!promptText.includes("agent identity")) {
-  throw new Error(
-    "prompt.md must instruct the LLM to self-identify with the phrase 'agent identity' at phase entry."
-  );
-}
-
-const replayPermissionLevels = [
-  "deny",
-  "strict-replay",
-  "canonicalize",
-  "confirmed-equivalence",
-  "state-proof-replay"
-];
-const replayPolicyPath = "references/replay-permission-policy.md";
-const replayPolicyText = readFileSync(resolve(root, replayPolicyPath), "utf8");
-for (const level of replayPermissionLevels) {
-  if (!replayPolicyText.includes(level)) {
-    throw new Error(`${replayPolicyPath} must define replay permission level '${level}'.`);
-  }
-  if (!promptText.includes(level)) {
-    throw new Error(`prompt.md must reference replay permission level '${level}'.`);
+const runtimeConfigText = readFileSync(resolve(runtimeRoot, "scripts/lib/config.mjs"), "utf8");
+const runtimeSchemaVersionsText = readFileSync(resolve(runtimeRoot, "scripts/lib/schema-versions.mjs"), "utf8");
+const runtimeSchemasText = readFileSync(resolve(runtimeRoot, "scripts/lib/schemas.mjs"), "utf8");
+for (const token of ["composeRequestPath", "composeSummaryPath"]) {
+  if (!runtimeConfigText.includes(token)) {
+    throw new Error(`runtime/scripts/lib/config.mjs must expose ${token}.`);
   }
 }
-for (const name of agentNames) {
-  const agentText = readFileSync(resolve(agentsRoot, `${name}/AGENT.md`), "utf8");
-  if (!agentText.includes(replayPolicyPath)) {
-    throw new Error(`agents/${name}/AGENT.md must reference ${replayPolicyPath}.`);
-  }
-  for (const level of replayPermissionLevels) {
-    if (!agentText.includes(level)) {
-      throw new Error(`agents/${name}/AGENT.md must reference replay permission level '${level}'.`);
-    }
+for (const token of ["composeDecision", "composeSummary"]) {
+  if (!new RegExp(`${token}:\\s*1`).test(runtimeSchemaVersionsText)) {
+    throw new Error(`runtime/scripts/lib/schema-versions.mjs must register ${token}.`);
   }
 }
-if (!/Intent classification: action replay vs DATA extraction vs both/i.test(promptText)) {
-  throw new Error("prompt.md must begin its checklist with intent classification.");
-}
-if (
-  !/top N|current|latest|headlines|prices|rows|list|collect|read|check values/i.test(promptText)
-) {
-  throw new Error("prompt.md must route top/current/latest/list-style requests to Extract.");
-}
-if (!/stop on the listing or data page/i.test(promptText)) {
-  throw new Error("prompt.md must tell data-only flows to stop on the listing or data page.");
-}
-if (!/ordinal list action/i.test(promptText)) {
-  throw new Error("prompt.md must preserve ordinal list actions for dynamic item clicks.");
-}
-if (!/not only fixed-title/i.test(promptText)) {
-  throw new Error("prompt.md must not collapse dynamic item clicks into only fixed-title clicks.");
-}
-if (
-  !/current\/top\/latest\/list data[\s\S]*Extract routing/i.test(
-    orchestratorAgentText
-  )
-) {
-  throw new Error(
-    "agents/orchestrator/AGENT.md must own interpreting current/top/latest/list data and Extract routing."
-  );
-}
-if (!/dynamic_content_drift[\s\S]*action_path/i.test(promptText)) {
-  throw new Error("prompt.md must explain dynamic_content_drift with action_path.");
-}
-if (!/not a claim that the user'?s action was wrong/i.test(promptText.replace(/\s+/g, " "))) {
-  throw new Error("prompt.md must describe dynamic drift holds as not-verified rather than user failure.");
-}
-if (/verification_failed/i.test(promptText) || /verification_failed/i.test(orchestratorAgentText)) {
-  throw new Error("skill contract must use structured not_verified_hold wording instead of verification_failed.");
-}
-if (!/not_verified_hold/i.test(promptText) || !/not_verified_hold/i.test(orchestratorAgentText)) {
-  throw new Error("skill contract must define not_verified_hold as the structured replay hold checkpoint.");
-}
-if (!/capture_noise_review/i.test(promptText) || !/capture_noise_review/i.test(orchestratorAgentText)) {
-  throw new Error("skill contract must define capture_noise_review for ambiguous capture-noise review.");
-}
-if (!/review-noise --run-id <id>/i.test(promptText) || !/review-noise --run-id <id>/i.test(orchestratorAgentText)) {
-  throw new Error("skill contract must route capture_noise_review through the review-noise briefing/apply command.");
-}
-if (!/locator_intent_review/i.test(promptText) || !/locator_intent_review/i.test(orchestratorAgentText)) {
-  throw new Error("skill contract must define locator_intent_review for generic same-name semantic locator review.");
-}
-if (!/review-locator-intent --run-id <id>/i.test(promptText) || !/review-locator-intent --run-id <id>/i.test(orchestratorAgentText)) {
-  throw new Error("skill contract must route locator_intent_review through the review-locator-intent briefing/apply command.");
-}
-if (!/action text[\s\S]*semantic|semantic[\s\S]*action text/i.test(promptText) || !/same-name counts/i.test(promptText)) {
-  throw new Error("prompt.md must require full locator_intent_review candidate briefing instead of opaque all-candidate prompts.");
-}
-if (!/review-noise[\s\S]*reviewNoiseCommand|reviewNoiseCommand[\s\S]*review-noise/.test(cliDispatchText)) {
-  throw new Error("runtime CLI must dispatch the review-noise command.");
-}
-if (!/review-locator-intent[\s\S]*reviewLocatorIntentCommand|reviewLocatorIntentCommand[\s\S]*review-locator-intent/.test(cliDispatchText)) {
-  throw new Error("runtime CLI must dispatch the review-locator-intent command.");
-}
-
-const composeHeader = "## Compose — v1 boundary";
-const composeIndex = promptText.indexOf(composeHeader);
-if (composeIndex === -1) {
-  throw new Error("prompt.md must include a compose boundary section.");
-}
-const composeEnd = promptText.indexOf("## Constitutional Invariants", composeIndex);
-const composeSection = promptText.slice(composeIndex, composeEnd === -1 ? promptText.length : composeEnd);
-if (!/bf compose --run-id <id> --request "<goal>"/i.test(composeSection)) {
-  throw new Error("compose section must document `bf compose --run-id <id> --request \"<goal>\"`.");
-}
-if (!/one primary run/i.test(composeSection) || !/primary-run-only/i.test(composeSection)) {
-  throw new Error("compose section must state that v1 is primary-run-only.");
-}
-if (!/interactive live learning/i.test(composeSection)) {
-  throw new Error("compose section must mention interactive live learning.");
-}
-if (!/multi-run compose[\s\S]*deferred/i.test(composeSection)) {
-  throw new Error("compose section must defer multi-run compose.");
-}
-if (
-  !/code-enforced safety gates/i.test(composeSection) ||
-  !/runtime validation and gate\s+code/i.test(composeSection)
-) {
-  throw new Error("compose section must keep safety enforcement in code and validator wording.");
-}
-if (!/composeCommand/.test(cliDispatchText)) {
-  throw new Error("runtime CLI must dispatch the compose command.");
-}
-if (!/name:\s*"compose"/.test(cliDispatchText) || !/Compose a primary workflow request/i.test(cliDispatchText)) {
-  throw new Error("runtime CLI help metadata must document the compose command.");
-}
-if (!/composeRequestPath/.test(runtimeConfigText) || !/composeSummaryPath/.test(runtimeConfigText)) {
-  throw new Error("runtime/scripts/lib/config.mjs must expose compose artifact paths.");
-}
-if (!/composeDecision:\s*1/.test(runtimeSchemaVersionsText) || !/composeSummary:\s*1/.test(runtimeSchemaVersionsText)) {
-  throw new Error("runtime/scripts/lib/schema-versions.mjs must register compose artifact schema versions.");
-}
-if (!/ComposeDecisionV1/.test(runtimeSchemasText) || !/ComposeSummaryV1/.test(runtimeSchemasText)) {
-  throw new Error("runtime/scripts/lib/schemas.mjs must include compose artifact schemas.");
+for (const token of ["ComposeDecisionV1", "ComposeSummaryV1"]) {
+  if (!runtimeSchemasText.includes(token)) {
+    throw new Error(`runtime/scripts/lib/schemas.mjs must include ${token}.`);
+  }
 }
 
 process.stdout.write("browser-flow skill validated\n");

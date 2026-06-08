@@ -492,7 +492,7 @@ export const COMMANDS = [
     related: ["run", "verify", "help workflows"],
     readArtifacts: ["artifacts/runs/<id>/workflow.json"],
     writtenArtifacts: ["artifacts/runs/<derivedId>/compose/*", "artifacts/runs/<derivedId>/workflow.json", "generated/runner.mjs", "reports/verification.json", "reports/security.json"],
-    safetyImplications: ["Compose v1 is primary-run-only and still requires generated runner verification."]
+    safetyImplications: ["Compose is primary-run-only and still requires generated runner verification."]
   }),
   command({
     name: "teardown",
