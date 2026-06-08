@@ -1,82 +1,11 @@
 # Browser Flow History
 
-This is a compact development history for the public release repository. It is
-not a commit-by-commit changelog. Each entry summarizes a major arc in the
-project: what problem surfaced, what changed, and what capability or release
-posture improved as a result.
+This is a compact development history for Browser Flow. It is not a
+commit-by-commit changelog. Each entry summarizes a major arc in the project:
+what problem surfaced, why it mattered, what changed, and what capability
+improved as a result.
 
 <!-- browser-flow-history:start -->
-## Work Item: cli-public-surface - CLI public surface
-
-- Status: resolved
-- First recorded: 2026-06-07T07:22:35.311Z
-- Last updated: 2026-06-07T07:22:35.311Z
-
-### User Request
-Sync the CLI public-surface work into the released browser-flow package after the verification-quality release was merged.
-
-### Why It Mattered
-The installed package needs the same CLI affordances, error contracts, schema metadata, docs, and missing-option regression fix that were validated in the source repo, without carrying local runtime smoke artifacts or learned knowledge into the public release.
-
-### Model Conclusion
-The release should expose the workflow-oriented CLI contract and keep the bug fix for missing string option values, while preserving the existing typecheck baseline as a documented pre-existing source issue rather than treating it as a release blocker.
-
-### Changes Made
-Synced CLI help and topic documentation, machine-readable schema and capabilities output, stable error taxonomy, dry-run previews, doctor preflight reporting, shell completion, consistency tests, docs, generated-source scanner false-positive reductions, and the missing string option value fix with its regression test.
-
-### Expected Resolution
-Users and agents installing the released package can discover commands, inspect command contracts, rely on stable invalid-usage errors, run safer previews and doctor checks, and receive a clear error when a string option is provided without a value.
-
-### Validation
-On the integrated source branch: npm run lint passed; the focused CLI/docs/security/analyze/observe test command passed 111/111; npm run validate-skill passed. The CLI validation report records npm run check as a pre-existing typecheck baseline on main/merge-base, not branch-only. During release sync: release audit and project-local install smoke are expected to run before publication.
-
-### Publication Notes
-This release sync contains CLI public-surface changes only. The verification-quality work was already published separately; the source merge commit preserves release ancestry after that merge. Runtime smoke artifacts, registry entries, and page-node knowledge are not part of this release branch.
-
-### Updates
-
-#### 2026-06-07T07:22:35.311Z - cf4c72d
-
-- Source branch: main
-- Source SHA: cf4c72d
-- Release SHA: pending-this-commit
-- Bundle file count: 233
-- Related source commits:
-  - 585f13b phase0/bootstrap: record CLI baseline audit
-  - 6b346e1 phase1/help: add workflow-oriented CLI help
-  - 22c9fcc phase2/schema: expose CLI contract JSON
-  - 7ec8255 phase3/error-contract: stabilize CLI failure output
-  - 34e1bbd phase4/safety: add dry-run previews and doctor preflight
-  - 04678a4 phase5/docs: document CLI and add shell completion
-  - 069ecc3 phase6/final-review: lock CLI surface consistency
-  - d1bdec7 phase7/security-scan: reduce generated artifact false positives
-  - f23426b fix/cli: reject missing string option values
-  - 0e2acf9 test/report: record CLI public-surface validation
-  - 97c26de test/report: document typecheck baseline comparison
-  - cf4c72d merge verification quality fixes into CLI public surface
-
-##### User Request
-Sync the CLI public-surface work into the released browser-flow package after the verification-quality release was merged.
-
-##### Why It Mattered
-The installed package needs the same CLI affordances, error contracts, schema metadata, docs, and missing-option regression fix that were validated in the source repo, without carrying local runtime smoke artifacts or learned knowledge into the public release.
-
-##### Model Conclusion
-The release should expose the workflow-oriented CLI contract and keep the bug fix for missing string option values, while preserving the existing typecheck baseline as a documented pre-existing source issue rather than treating it as a release blocker.
-
-##### Changes Made
-Synced CLI help and topic documentation, machine-readable schema and capabilities output, stable error taxonomy, dry-run previews, doctor preflight reporting, shell completion, consistency tests, docs, generated-source scanner false-positive reductions, and the missing string option value fix with its regression test.
-
-##### Expected Resolution
-Users and agents installing the released package can discover commands, inspect command contracts, rely on stable invalid-usage errors, run safer previews and doctor checks, and receive a clear error when a string option is provided without a value.
-
-##### Validation
-On the integrated source branch: npm run lint passed; the focused CLI/docs/security/analyze/observe test command passed 111/111; npm run validate-skill passed. The CLI validation report records npm run check as a pre-existing typecheck baseline on main/merge-base, not branch-only. During release sync: release audit and project-local install smoke are expected to run before publication.
-
-##### Publication Notes
-This release sync contains CLI public-surface changes only. The verification-quality work was already published separately; the source merge commit preserves release ancestry after that merge. Runtime smoke artifacts, registry entries, and page-node knowledge are not part of this release branch.
-
-
 ## Work Item: verification-quality-fixes - Verification quality fixes
 
 - Status: resolved
@@ -90,79 +19,16 @@ Fix installed CLI E2E verification-quality issues where generated CDP runtime ID
 Verification could replay correctly while final promotion was blocked by known generated CDP metadata being misclassified as secrets, or by DOM evidence that did not prove the goal-specific final state.
 
 ### Model Conclusion
-The release should keep strict artifact scanning, classify only known CDP opaque runtime metadata as non-blocking audit findings, and prefer bounded final-state DOM evidence over generic headings, broad containers, or short action labels.
+Browser Flow should keep strict artifact scanning, classify only known CDP opaque runtime metadata as non-blocking audit findings, and prefer bounded final-state DOM evidence over generic headings, broad containers, or short action labels.
 
 ### Changes Made
-Updated the released security scanner to inspect structured high-entropy values, preserve JavaScript literal scanning, narrowly classify known CDP frame/target IDs as non-blocking runtime metadata, and harden generated-source filtering. Updated page evidence collection and analyzer priority scoring to prefer semantic final-state regions, support common plural labels such as details/results/receipts/totals, filter invisible or non-semantic candidates, avoid unnecessary layout reads, and demote weak action-label evidence.
+Updated the security scanner to inspect structured high-entropy values, preserve JavaScript literal scanning, narrowly classify known CDP frame/target IDs as non-blocking runtime metadata, and harden generated-source filtering. Updated page evidence collection and analyzer priority scoring to prefer semantic final-state regions, support common plural labels such as details/results/receipts/totals, filter invisible or non-semantic candidates, avoid unnecessary layout reads, and demote weak action-label evidence.
 
 ### Expected Resolution
 Installed browser-flow CLI verification can promote valid replay runs without false blocking on known CDP runtime IDs, while final DOM evidence is anchored on meaningful final-state content such as detail, result, status, receipt, price, or total regions.
 
 ### Validation
-Ran focused security scanner, page-evidence, analyzer, observe, and locator regression tests; ran lint and release audit; ran project-local install smoke; and verified the installed CLI E2E workflow with two consecutive verify passes.
-
-### Publication Notes
-This release sync contains the verification-quality fixes only. Review follow-up fixes are folded into the final release state rather than recorded as separate public history entries.
-
-
-## Work Item: public-sync-state - Public sync state
-
-- Status: resolved
-- First recorded: 2026-06-04T13:02:54.085Z
-- Last updated: 2026-06-04T13:02:54.085Z
-
-### User Request
-Mark the release folder as public and ensure release sync behaves correctly after publication.
-
-### Why It Mattered
-Once the release repository is public, bootstrap-amend must stop and append syncs must keep README latest metadata aligned without inventing changes when the source is already synced.
-
-### Model Conclusion
-The release state should be published=true, and append sync should return unchanged when the release already points at the current source commit.
-
-### Changes Made
-Marked the release state as public, added an unchanged public-sync path, and covered it with a sync-release regression test.
-
-### Expected Resolution
-Future public release syncs use append mode, require release notes for real source changes, and do not fail on no-op sync attempts.
-
-### Validation
-Ran sync-release tests, pii scan, no-provenance scan, skill validation, and release audit.
-
-### Publication Notes
-The release folder is now in public-state mode; bootstrap-amend is intentionally disabled after this point.
-
-### Updates
-
-#### 2026-06-04T13:02:54.085Z - 8d11927
-
-- Source branch: main
-- Source SHA: 8d11927
-- Release SHA: pending-this-commit
-- Bundle file count: 230
-- Related source commits:
-  - 8d11927 fix(release): allow unchanged public sync
-
-##### User Request
-Mark the release folder as public and ensure release sync behaves correctly after publication.
-
-##### Why It Mattered
-Once the release repository is public, bootstrap-amend must stop and append syncs must keep README latest metadata aligned without inventing changes when the source is already synced.
-
-##### Model Conclusion
-The release state should be published=true, and append sync should return unchanged when the release already points at the current source commit.
-
-##### Changes Made
-Marked the release state as public, added an unchanged public-sync path, and covered it with a sync-release regression test.
-
-##### Expected Resolution
-Future public release syncs use append mode, require release notes for real source changes, and do not fail on no-op sync attempts.
-
-##### Validation
-Ran sync-release tests, pii scan, no-provenance scan, skill validation, and release audit.
-
-##### Publication Notes
-The release folder is now in public-state mode; bootstrap-amend is intentionally disabled after this point.
+Ran focused security scanner, page-evidence, analyzer, observe, and locator regression tests; ran lint; ran project-local install checks; and verified the installed CLI E2E workflow with two consecutive verify passes.
 
 
 ## 2026-05-16 - Secure capture and truthful replay baseline
@@ -232,12 +98,11 @@ extract-heal, and durable `knowledge/scraping/<pageKey>/` storage. The design
 kept page-structure knowledge separate from data-extraction knowledge, so a
 model-derived scraper can be reused later without spending tokens again.
 
-## 2026-05-24 to 2026-05-25 - Public release surface and security gates
+## 2026-05-24 to 2026-05-25 - Public skill surface and security gates
 
-The release work defined the public shipping boundary. Browser Flow added a
-shipping allowlist, bundle builder, PII scanner, no-provenance gate, release
-audit, and git-tracked-file shipping rule so local development artifacts would
-not leak into the public package.
+This work defined the public skill boundary. Browser Flow added artifact
+sanitization, PII scanning, provenance checks, and git-tracked-file review so
+local development artifacts would not leak into the installable package.
 
 Security and verification also became more honest. Path containment,
 page-key validation, scraping-key validation, localhost-only CDP binding,
@@ -273,7 +138,7 @@ only capturing a single path.
 ## 2026-05-27 - Cross-runtime surfaces, reveal semantics, screenshots, and graph context
 
 The public skill surface was then made reproducible across Codex and Claude.
-Canonical rendering and adapter projection kept one public Browser Flow entry
+Canonical rendering and adapter command generation kept one public Browser Flow entry
 while moving internal contracts behind agent-owned private playbooks.
 
 At the same time, Browser Flow started representing more visual and stateful
@@ -302,6 +167,6 @@ layered actions, and two-lane action-window capture.
 Stateful surface replay proofs then tightened how Browser Flow proves visual
 and stateful real-site workflows. CSR locator readiness, headed verification
 parity, provider-primer target checks, concrete reveal targets, duplicate
-network proof handling, source-range metadata, and distribution-surface
-documentation clarified both proof quality and public release posture.
+network proof handling, source-range metadata, and user-facing documentation
+clarified proof quality.
 <!-- browser-flow-history:end -->

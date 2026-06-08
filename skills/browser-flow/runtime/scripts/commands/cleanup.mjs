@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { getBooleanOption, getStringOption } from "../lib/args.mjs";
+import { getStringOption } from "../lib/args.mjs";
 import { getRunPaths } from "../lib/config.mjs";
 import { readJson } from "../lib/fs.mjs";
 import { readJournal } from "../lib/state-journal.mjs";
@@ -11,8 +11,8 @@ import { collectDangling } from "../lib/dangling.mjs";
  * and spawns the run's generated runner in cleanup-only mode
  * (BROWSER_FLOW_CLEANUP_NAMES env var) to delete them via the teardown recipe.
  *
- * @param {{ runId: string, headless?: boolean, dryRun?: boolean }} input
- * @returns {Promise<{ runId: string, dangling: string[], removed: string[], errors: Array<{name:string,error:string}>, dryRun?: boolean, wouldRun?: boolean, runnerPath?: string }>}
+ * @param {{ runId: string, headless?: boolean }} input
+ * @returns {Promise<{ runId: string, dangling: string[], removed: string[], errors: Array<{name:string,error:string}> }>}
  */
 export async function runCleanupCommand(input) {
   const runPaths = getRunPaths(input.runId);
@@ -20,17 +20,6 @@ export async function runCleanupCommand(input) {
   const dangling = collectDangling(journal);
   if (dangling.length === 0) {
     return { runId: input.runId, dangling: [], removed: [], errors: [] };
-  }
-  if (input.dryRun === true) {
-    return {
-      runId: input.runId,
-      dryRun: true,
-      dangling,
-      removed: [],
-      errors: [],
-      wouldRun: existsSync(runPaths.runnerPath),
-      runnerPath: runPaths.runnerPath
-    };
   }
   if (!existsSync(runPaths.runnerPath)) {
     return {
@@ -92,10 +81,10 @@ function spawnCleanupRunner(runnerPath, headless, cleanupNamesJson) {
 
 /**
  * @param {Record<string, string | boolean>} options
- * @returns {Promise<{ runId: string, dangling: string[], removed: string[], errors: Array<{name:string,error:string}>, dryRun?: boolean, wouldRun?: boolean, runnerPath?: string }>}
+ * @returns {Promise<{ runId: string, dangling: string[], removed: string[], errors: Array<{name:string,error:string}> }>}
  */
 export function cleanupCommand(options) {
   const runId = getStringOption(options, "run-id", undefined);
   if (!runId) throw new Error("bf cleanup requires --run-id");
-  return runCleanupCommand({ runId, dryRun: getBooleanOption(options, "dry-run") });
+  return runCleanupCommand({ runId });
 }

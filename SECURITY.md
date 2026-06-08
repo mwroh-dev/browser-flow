@@ -12,7 +12,7 @@ Browser Flow is intentionally constrained:
   not be written to workflow artifacts
 - real-site capture is explicit, not the default silent behavior
 - replay verification uses a separate browser profile from capture
-- screenshots and DOM snapshots are local artifacts and should not be published
+- screenshots and DOM snapshots are local artifacts and should not be shared
 - promotion of external workflows is gated by verification and security checks
 
 These constraints are part of the product design. They may make some convenient
@@ -30,9 +30,9 @@ those choices carefully. Only capture what is necessary, keep artifacts local,
 and avoid sharing run outputs that may include page text, screenshots, DOM
 snapshots, account identifiers, or business data.
 
-## Do Not Publish Sensitive Artifacts
+## Do Not Share Sensitive Artifacts
 
-Before opening issues, sharing logs, or publishing examples, remove:
+Before opening issues, sharing logs, or sharing examples, remove:
 
 - `artifacts/` run directories
 - screenshots

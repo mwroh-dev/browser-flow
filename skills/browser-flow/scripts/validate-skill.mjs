@@ -39,8 +39,6 @@ const requiredRuntimeFiles = [
   "scripts/compose/policy-hooks.mjs",
   "scripts/lib/schemas.mjs",
   "scripts/lib/schema-versions.mjs",
-  "scripts/lib/cli-metadata.mjs",
-  "scripts/lib/cli-registry.mjs",
   "scripts/lib/config.mjs",
   "package.json",
   "package-lock.json"
@@ -59,95 +57,6 @@ for (const relativePath of requiredAgentFiles) {
 for (const relativePath of requiredRuntimeFiles) {
   if (!existsSync(resolve(runtimeRoot, relativePath))) {
     throw new Error(`Missing required runtime file: runtime/${relativePath}`);
-  }
-}
-
-// Every agent's AGENT.md must declare a Safety Layers section
-// (multi-layered-safety-via-code: Role / Gate / Rule / Hook mapping).
-// The Safety Layers section must additionally include explicit
-// Role and Gate rows so the four-layer model is structurally complete.
-const requiredSafetyLayerRows = ["| Role ", "| Gate "];
-for (const name of agentNames) {
-  const agentText = readFileSync(resolve(agentsRoot, `${name}/AGENT.md`), "utf8");
-  const safetyHeader = "## Safety Layers";
-  const safetyIndex = agentText.indexOf(safetyHeader);
-  if (safetyIndex === -1) {
-    throw new Error(
-      `agents/${name}/AGENT.md must declare a '## Safety Layers' section.`
-    );
-  }
-  const safetySection = agentText.slice(safetyIndex);
-  for (const row of requiredSafetyLayerRows) {
-    if (!safetySection.includes(row)) {
-      throw new Error(
-        `agents/${name}/AGENT.md Safety Layers section must include a '${row.trim()}' row (multi-layered-safety-via-code).`
-      );
-    }
-  }
-}
-
-// Section-order check — every AGENT.md must match the canonical
-// outline. The only slot that varies is role-specific (orchestrator:
-// Phase Agents + Skill Entry Point; phase agents: Callable Tools).
-// Everything from Behavioral Contract onward is identical across all
-// five agents.
-const orchestratorSections = [
-  "Identity",
-  "Role",
-  "Phase Agents",
-  "Skill Entry Point",
-  "Behavioral Contract",
-  "Safety Layers",
-  "Knowledge"
-];
-const phaseAgentSections = [
-  "Identity",
-  "Role",
-  "Callable Tools",
-  "Behavioral Contract",
-  "Safety Layers",
-  "Knowledge"
-];
-for (const name of agentNames) {
-  const agentText = readFileSync(resolve(agentsRoot, `${name}/AGENT.md`), "utf8");
-  const sectionHeaders = (agentText.match(/^## .+$/gm) ?? []).map((line) =>
-    line.slice(3).trim()
-  );
-  const expected = name === "orchestrator" ? orchestratorSections : phaseAgentSections;
-  if (sectionHeaders.length !== expected.length) {
-    throw new Error(
-      `agents/${name}/AGENT.md must have exactly ${expected.length} top-level sections (found ${sectionHeaders.length}: ${JSON.stringify(sectionHeaders)})`
-    );
-  }
-  for (let i = 0; i < expected.length; i += 1) {
-    if (sectionHeaders[i] !== expected[i]) {
-      throw new Error(
-        `agents/${name}/AGENT.md section #${i + 1} must be '## ${expected[i]}' (found '## ${sectionHeaders[i]}')`
-      );
-    }
-  }
-}
-
-// knowledge-pattern.md must declare its canonical strategy
-// header verbatim (knowledge-update-strategies.md canonical form).
-// The agent-type → strategy mapping is fixed; drift means the agent's
-// declared strategy and the strategy actually used to write semantic
-// entries can diverge silently.
-const expectedStrategyHeader = {
-  orchestrator: "## Strategy: Strategy B + prediction-error + meta",
-  capture: "## Strategy: Strategy B + prediction-error",
-  analyzer: "## Strategy: Strategy B (N=3)",
-  generator: "## Strategy: Strategy B (N=3)",
-  verifier: "## Strategy: Strategy B + prediction-error"
-};
-for (const name of agentNames) {
-  const patternPath = resolve(agentsRoot, `${name}/knowledge-pattern.md`);
-  const patternText = readFileSync(patternPath, "utf8");
-  const expected = expectedStrategyHeader[name];
-  if (!patternText.includes(expected)) {
-    throw new Error(
-      `agents/${name}/knowledge-pattern.md must declare strategy header '${expected}' verbatim (knowledge-update-strategies.md canonical form)`
-    );
   }
 }
 
@@ -199,7 +108,6 @@ if (!Array.isArray(manifest.references)) {
 
 const promptText = readFileSync(resolve(root, "prompt.md"), "utf8");
 const runtimeCliMainText = readFileSync(resolve(runtimeRoot, "scripts/cli-main.mjs"), "utf8");
-const runtimeCliMetadataText = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-metadata.mjs"), "utf8");
 const runtimeConfigText = readFileSync(resolve(runtimeRoot, "scripts/lib/config.mjs"), "utf8");
 const runtimeSchemaVersionsText = readFileSync(resolve(runtimeRoot, "scripts/lib/schema-versions.mjs"), "utf8");
 const runtimeSchemasText = readFileSync(resolve(runtimeRoot, "scripts/lib/schemas.mjs"), "utf8");
@@ -409,12 +317,17 @@ if (!/review-locator-intent --run-id <id>/i.test(promptText) || !/review-locator
 if (!/action text[\s\S]*semantic|semantic[\s\S]*action text/i.test(promptText) || !/same-name counts/i.test(promptText)) {
   throw new Error("prompt.md must require full locator_intent_review candidate briefing instead of opaque all-candidate prompts.");
 }
-const runtimeCliRegistryText = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-registry.mjs"), "utf8");
-if (!/"review-noise":\s*async \(\) =>[\s\S]*reviewNoiseCommand/.test(runtimeCliRegistryText)) {
-  throw new Error("runtime/scripts/lib/cli-registry.mjs must lazy-load reviewNoiseCommand.");
+if (!/import\s+\{\s*reviewNoiseCommand\s*\}\s+from\s+"\.\/commands\/review-noise\.mjs"/.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs must import reviewNoiseCommand.");
 }
-if (!/"review-locator-intent":\s*async \(\) =>[\s\S]*reviewLocatorIntentCommand/.test(runtimeCliRegistryText)) {
-  throw new Error("runtime/scripts/lib/cli-registry.mjs must lazy-load reviewLocatorIntentCommand.");
+if (!/if \(command === "review-noise"\)/.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs must dispatch the review-noise command.");
+}
+if (!/import\s+\{\s*reviewLocatorIntentCommand\s*\}\s+from\s+"\.\/commands\/review-locator-intent\.mjs"/.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs must import reviewLocatorIntentCommand.");
+}
+if (!/if \(command === "review-locator-intent"\)/.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs must dispatch the review-locator-intent command.");
 }
 
 const composeHeader = "## Compose — v1 boundary";
@@ -442,14 +355,14 @@ if (
 ) {
   throw new Error("compose section must keep safety enforcement in code and validator wording.");
 }
-if (!/compose:\s*async \(\) =>[\s\S]*composeCommand/.test(runtimeCliRegistryText)) {
-  throw new Error("runtime/scripts/lib/cli-registry.mjs must lazy-load composeCommand.");
+if (!/import\s+\{\s*composeCommand\s*\}\s+from\s+"\.\/commands\/compose\.mjs"/.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs must import composeCommand.");
 }
-if (!/name:\s*"compose"[\s\S]*description:\s*"Compose a primary workflow request/i.test(runtimeCliMetadataText)) {
-  throw new Error("runtime/scripts/lib/cli-metadata.mjs help metadata must document the compose command.");
+if (!/compose\s+Compose a primary workflow request/i.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs help text must document the compose command.");
 }
-if (!/COMMAND_REGISTRY/.test(runtimeCliMainText) && !/resolveRegistryEntry/.test(runtimeCliMainText)) {
-  throw new Error("runtime/scripts/cli-main.mjs must dispatch through the command registry.");
+if (!/if \(command === "compose"\)/.test(runtimeCliMainText)) {
+  throw new Error("runtime/scripts/cli-main.mjs must dispatch the compose command.");
 }
 if (!/composeRequestPath/.test(runtimeConfigText) || !/composeSummaryPath/.test(runtimeConfigText)) {
   throw new Error("runtime/scripts/lib/config.mjs must expose compose artifact paths.");

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { getStringOption } from "../lib/args.mjs";
-import { getPaths, getRunPaths } from "../lib/config.mjs";
+import { getRunPaths } from "../lib/config.mjs";
 import { readJson } from "../lib/fs.mjs";
 import { parseDataResult } from "../lib/schemas.mjs";
 import {
@@ -37,7 +37,6 @@ export function promoteCommand(options) {
   if (!runId) {
     throw new Error("promote requires --run-id.");
   }
-  const dryRun = options["dry-run"] === true;
   if (getStringOption(options, "scope", undefined) !== "external") {
     throw new Error("promote currently supports only --scope external.");
   }
@@ -127,18 +126,6 @@ export function promoteCommand(options) {
       ...(dataResult ? { dataResultPath: runPaths.dataResultPath, dataOutcome: dataResult.dataOutcome, rowCount: dataResult.rowCount } : {})
     }
   };
-
-  if (dryRun) {
-    return {
-      ok: true,
-      dryRun: true,
-      runId,
-      status: "replay_verified",
-      registryMutation: "required-upsert",
-      wouldWrite: [getPaths().registryPath],
-      promotion: entry.promotion
-    };
-  }
 
   upsertRegistryEntry(entry);
 

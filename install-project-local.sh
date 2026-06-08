@@ -57,22 +57,10 @@ if [ ! -d "$target_dir" ]; then
 fi
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-renderer_script="$script_dir/scripts/publish/render-browser-flow-surfaces-cli.mjs"
-stage_root=""
-
-cleanup() {
-  if [ -n "$stage_root" ] && [ -d "$stage_root" ]; then
-    rm -rf "$stage_root"
-  fi
-}
-trap cleanup EXIT
+renderer_script="$script_dir/scripts/install/render-claude-command.mjs"
 
 if [ -f "$script_dir/skills/browser-flow/SKILL.md" ]; then
   source_skill_dir="$script_dir/skills/browser-flow"
-elif [ -f "$renderer_script" ]; then
-  stage_root=$(mktemp -d "${TMPDIR:-/tmp}/browser-flow-install-source-XXXXXX")
-  source_skill_dir="$stage_root/browser-flow"
-  node "$renderer_script" assemble-package "$source_skill_dir"
 else
   printf 'Cannot find browser-flow skill next to installer: %s\n' "$script_dir" >&2
   exit 70
@@ -94,7 +82,7 @@ copy_dir() {
 render_claude_command() {
   dest_file=$1
   mkdir -p "$(dirname -- "$dest_file")"
-  node "$renderer_script" render-claude-command "$dest_file" ".claude/browser-flow"
+  node "$renderer_script" "$source_skill_dir" "$dest_file" ".claude/browser-flow"
 }
 
 prune_empty_dir() {
@@ -120,7 +108,7 @@ remove_stale_public_entries() {
   shopt -u nullglob
 }
 
-remove_browser_flow_projections() {
+remove_browser_flow_installs() {
   rm -rf "$target_dir/.codex/skills/browser-flow"
   rm -rf "$target_dir/.claude/browser-flow"
   rm -f "$target_dir/.claude/commands/browser-flow.md"
@@ -136,7 +124,7 @@ remove_browser_flow_projections() {
 }
 
 remove_stale_public_entries
-remove_browser_flow_projections
+remove_browser_flow_installs
 
 case "$tool" in
   codex)
