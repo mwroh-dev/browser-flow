@@ -236,8 +236,8 @@ the others are advisory until a Hook backs them.
 | Layer | Item | Where enforced |
 |-------|------|----------------|
 | Role | Walk the 4 phases by adopting each phase agent's identity; read `knowledge/registry/`; do not execute CLI commands under own identity | `agents/orchestrator/openai.yaml` (`role_type: entry`, `guardrails`); `prompt.md` Role Identity + Phase Entry Protocol |
-| Gate | Phase Entry Protocol — load projected view + self-identify before invoking the phase tool | `prompt.md` Pipeline — Phase Entry Protocol; `surfaces/browser-flow/package/scripts/validate-skill.mjs` enforces 5-agent projected-view linkage |
-| Constitutional + Hook | Project-local install boundary; real-site capture requires explicit `--unmasked` opt-in | `tests/publish/project-local-install.test.mjs` enforces install shape; `scripts/security/local-only.mjs` rejects non-local URLs unless `prepare --unmasked` is set; registry gates block unmasked diagnostic runs from silent verified promotion |
+| Gate | Phase Entry Protocol — load projected view + self-identify before invoking the phase tool | `prompt.md` Pipeline — Phase Entry Protocol; `scripts/validate-skill.mjs` checks projected-view linkage |
+| Constitutional + Hook | Project-local install boundary; real-site capture requires explicit `--unmasked` opt-in | `tests/install-project-local.test.mjs` enforces install shape; `scripts/security/local-only.mjs` rejects non-local URLs unless `prepare --unmasked` is set; registry gates block unmasked diagnostic runs from silent verified promotion |
 | Constitutional + Hook | Success declared only when both reports green | `scripts/verify/verify-run.mjs` writes the reports; `tests/e2e/false-positive-guard.test.mjs` proves the gate fails closed |
 | Rule | Stop only at `awaiting_capture`, `capture_noise_review`, `locator_intent_review`, `route_intent_review`, or `not_verified_hold` | `prompt.md` Checkpoint section (declarative — no code hook) |
 | Judgment (positive posture) | Surface user-facing actions, not `scripts/` internals | `prompt.md` Internal Boundary section — expressed as posture, not a hard ban |

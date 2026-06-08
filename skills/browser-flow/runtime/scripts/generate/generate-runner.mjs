@@ -2940,7 +2940,7 @@ export async function runWorkflow(options = {}) {
     // Attach mode created no profile dir (replayProfileDir === null) — skip
     // removal so the user's logged-in Chrome profile is never touched.
     if (replayProfileDir) {
-      // Wait briefly for Chrome to fully release file handles before removing profile dir.
+      // Wait briefly for Chrome to close file handles before removing profile dir.
       await new Promise((r) => setTimeout(r, 200));
       try {
         rmSync(replayProfileDir, { recursive: true, force: true });

@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run-e2e:
+        description: Run Chrome-backed e2e tests
+        required: false
+        default: "false"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: skills/browser-flow/runtime/package-lock.json
+      - name: Install runtime dependencies
+        working-directory: skills/browser-flow/runtime
+        run: npm ci
+      - name: Check repository and install contract
+        run: node --test tests/*.test.mjs
+      - name: Check runtime
+        working-directory: skills/browser-flow/runtime
+        run: npm run check
+      - name: Validate skill
+        working-directory: skills/browser-flow/runtime
+        run: npm run validate-skill
+
+  e2e:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs['run-e2e'] == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: skills/browser-flow/runtime/package-lock.json
+      - name: Install runtime dependencies
+        working-directory: skills/browser-flow/runtime
+        run: npm ci
+      - name: Run Chrome-backed e2e tests
+        working-directory: skills/browser-flow/runtime
+        run: npm run test:e2e

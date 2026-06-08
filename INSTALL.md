@@ -1,13 +1,13 @@
 # Browser Flow project-local install
 
-Use the installer from a `browser-flow-released` checkout:
+Use the installer from this repository checkout:
 
 ```bash
 ./install-project-local.sh /path/to/target-project
 ./install-project-local.sh --tool claude /path/to/target-project
 ```
 
-The default install writes the Codex projection to:
+The default install writes the Codex skill to:
 
 ```text
 /path/to/target-project/.codex/skills/browser-flow
