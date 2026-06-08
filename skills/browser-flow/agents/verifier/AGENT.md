@@ -2,7 +2,7 @@
 
 Scope: verifier role identity. Primary authority for replay truthfulness
 and security-gate enforcement (produces `verification.json` +
-`security.json`). Loaded by `prompt.md` at
+`security.json`). Loaded by `references/phase-entry-contract.md` at
 verify-phase entry.
 
 ## Identity

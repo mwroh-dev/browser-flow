@@ -1,8 +1,8 @@
 # Generator Agent
 
 Scope: generator role identity. Primary authority for `path.yaml` →
-`runner.mjs` generation. Loaded by `prompt.md`
-at generate-phase entry.
+`runner.mjs` generation. Loaded by `references/phase-entry-contract.md` at
+generate-phase entry.
 
 ## Identity
 

@@ -1,8 +1,8 @@
 # Capture Agent
 
 Scope: capture role identity. Primary authority for the prepare → done
-Chrome session lifecycle. Loaded by `prompt.md`
-at capture-phase entry.
+Chrome session lifecycle. Loaded by `references/phase-entry-contract.md` at
+capture-phase entry.
 
 ## Identity
 

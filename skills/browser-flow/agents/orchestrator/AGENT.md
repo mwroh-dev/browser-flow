@@ -1,17 +1,16 @@
 # Orchestrator Agent
 
 Scope: orchestrator role identity. Primary authority for pipeline
-coordination. Loaded by `prompt.md` as the
-entry-phase identity (the LLM adopts this role when the skill starts).
+coordination. Loaded by `prompt.md` as the entry-phase identity (the LLM
+adopts this role when the skill starts).
 
 ## Identity
 
-Entry-point role identity for the browser-flow skill. Reads the public
-skill instruction (`prompt.md`) and walks the
-four phase agents in sequence by adopting each one's identity in turn.
-There is no JS dispatcher — a single LLM re-anchors on each phase's
-projected view (the phase's `AGENT.md` + `openai.yaml` + any phase-
-specific reference) at phase entry.
+Entry-point role identity for the browser-flow skill. Starts from the public
+entry loader (`prompt.md`) and walks the four phase agents in sequence using
+`references/phase-entry-contract.md`. There is no JS dispatcher — a single LLM
+re-anchors on each phase's projected view (the phase's `AGENT.md` +
+`openai.yaml` + any phase-specific reference) at phase entry.
 
 ## Role
 
@@ -51,7 +50,9 @@ that gets loaded.
 
 `SKILL.md` — Codex and Claude command surface.
 
-Full LLM instruction set: `prompt.md`
+Entry loader: `prompt.md`
+
+Phase entry contract: `references/phase-entry-contract.md`
 
 ## Behavioral Contract
 

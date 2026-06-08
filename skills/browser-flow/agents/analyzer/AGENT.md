@@ -2,7 +2,7 @@
 
 Scope: analyzer role identity. Primary authority for sanitized-event
 to YAML compilation (`path.yaml` + `recipe.yaml`). Loaded by
-`prompt.md` at analyze-phase entry.
+`references/phase-entry-contract.md` at analyze-phase entry.
 
 ## Identity
 
