@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { classifyCliError } from "../scripts/lib/cli-errors.mjs";
-import { chromeCheck, directoryWritableStatus } from "../scripts/commands/doctor.mjs";
+import { chromeCheck, directoryWritableStatus, doctorCommand } from "../scripts/commands/doctor.mjs";
 import { renderCompletion } from "../scripts/lib/completion.mjs";
 
 const runtimeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -73,6 +73,15 @@ test("doctor runtime dependency check searches parent node_modules directories",
   assert.match(source, /while \(true\)/);
   assert.match(source, /existsSync\(resolve\(dir, "node_modules", name, "package\.json"\)\)/);
   assert.match(source, /dir = parent/);
+});
+
+test("doctor security baseline follows release-independent security entrypoint", () => {
+  const result = doctorCommand({});
+  const check = result.preflight.checks.find((entry) => entry.name === "securityBaseline");
+
+  assert.equal(check?.status, "ok");
+  assert.match(check?.detail ?? "", /security scan entrypoint/);
+  assert.equal(result.preflight.ok, true);
 });
 
 test("zsh completion escapes colons in command descriptions", () => {

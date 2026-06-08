@@ -384,8 +384,7 @@ function registryCheck() {
 function securityBaselineCheck() {
   const repoRoot = getRepoRoot();
   const required = [
-    resolve(repoRoot, "scripts", "security", "pii-scan.mjs"),
-    resolve(repoRoot, "scripts", "security", "no-provenance.mjs")
+    resolve(repoRoot, "scripts", "security", "scan-artifacts.mjs")
   ];
   const missing = required.filter((path) => !existsSync(path));
   if (missing.length > 0) {
@@ -400,7 +399,7 @@ function securityBaselineCheck() {
     name: "securityBaseline",
     ok: true,
     status: "ok",
-    detail: "security scan entrypoints are present"
+    detail: "security scan entrypoint is present"
   };
 }
 
