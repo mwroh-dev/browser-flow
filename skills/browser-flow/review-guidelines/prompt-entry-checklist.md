@@ -8,8 +8,8 @@ Use this checklist when reviewing `prompt.md`.
 - [ ] `prompt.md` loads the orchestrator projected view at skill entry.
 - [ ] `prompt.md` points to the phase-entry contract instead of listing phase
   commands.
-- [ ] `prompt.md` tells the model to check the workflow registry before
-  recommending recapture.
+- [ ] `prompt.md` loads registry context; the orchestrator owns registry reuse
+  decisions before recommending recapture.
 - [ ] `prompt.md` does not restate policy already owned by `references/*`.
 - [ ] `prompt.md` does not restate behavior already owned by phase
   `agents/*/AGENT.md`.
