@@ -8,6 +8,7 @@
     "references/artifact-schemas.md",
     "references/verification-rules.md",
     "references/replay-permission-policy.md",
+    "references/phase-entry-contract.md",
     "references/checkpoint-contracts.md",
     "references/extract-operation.md",
     "references/compose-boundary.md",

@@ -16,22 +16,8 @@ Run a guideline review when a change touches:
 - `skills/*/SKILL.md`
 - runtime command or artifact contracts that affect model instructions
 
-Recommended review output:
-
-```text
-Scope:
-- <files reviewed>
-
-Checklist Results:
-- PASS/FAIL: Prompt entry boundary
-- PASS/FAIL: Agent ownership
-- PASS/FAIL: Reference policy ownership
-- PASS/FAIL: Checkpoint contract structure
-- PASS/FAIL: Release/public surface
-
-Findings:
-- [severity] <file>: <issue and required action>
-```
+Recommended review output lives in
+`review-guidelines/reports/review-report-template.md`.
 
 Guideline reviews are not build gates by themselves. They are the review contract
 for a human or model reviewer to apply before broad prompt or agent-document

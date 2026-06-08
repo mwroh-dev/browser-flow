@@ -4,9 +4,10 @@ Use this checklist when reviewing `prompt.md`.
 
 ## Entry Ownership
 
-- [ ] `prompt.md` explains how the model enters browser-flow.
+- [ ] `prompt.md` only declares which context to load for the current intent.
 - [ ] `prompt.md` loads the orchestrator projected view at skill entry.
-- [ ] `prompt.md` explains when phase projected views are loaded.
+- [ ] `prompt.md` points to the phase-entry contract instead of listing phase
+  commands.
 - [ ] `prompt.md` tells the model to check the workflow registry before
   recommending recapture.
 - [ ] `prompt.md` does not restate policy already owned by `references/*`.
@@ -17,11 +18,14 @@ Use this checklist when reviewing `prompt.md`.
 
 ## Structure
 
-- [ ] The core capture/analyze/generate/verify pipeline is short and regular.
+- [ ] The core capture/analyze/generate/verify pipeline details live outside
+  the entry prompt.
 - [ ] Optional operations are not numbered as core phases.
 - [ ] Checkpoint names may appear, but checkpoint contracts live in a reference
   or owner document.
-- [ ] The file favors tables or short ordered lists over long conditional prose.
+- [ ] CLI command lists do not appear in `prompt.md`; they live in a reference
+  or agent projection.
+- [ ] The file stays short enough to act as an entry loader, not a runbook.
 - [ ] The prompt does not expose version labels such as `v1` unless the label is
   needed for a user-visible choice.
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -48,10 +48,11 @@ test("claude install writes command and private skill paths that point at the co
     const privateRoot = resolve(target, ".claude/browser-flow");
     const commandText = readFileSync(resolve(target, ".claude/commands/browser-flow.md"), "utf8");
 
-    assert.match(commandText, /\.claude\/browser-flow\/runtime\/scripts\/cli\.mjs/);
     assert.match(commandText, /\.claude\/browser-flow\/agents\/orchestrator\/AGENT\.md/);
+    assert.match(commandText, /\.claude\/browser-flow\/references\/phase-entry-contract\.md/);
     assert.doesNotMatch(commandText, /\{\{[^}]+\}\}/);
     assert.equal(commandText.includes(["scripts", "pub" + "lish"].join("/")), false);
+    assert.equal(existsSync(resolve(privateRoot, "runtime/scripts/cli.mjs")), true);
 
     execFileSync("node", [resolve(privateRoot, "scripts/validate-skill.mjs")], {
       cwd: privateRoot,
