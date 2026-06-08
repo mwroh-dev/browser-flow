@@ -1,6 +1,6 @@
 # Browser Flow project-local install
 
-Use the installer from this released checkout:
+Use the installer from this repository checkout:
 
 ```bash
 ./install-project-local.sh /path/to/target-project

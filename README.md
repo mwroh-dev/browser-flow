@@ -20,7 +20,7 @@ artifact paths take priority over decorative terminal output.
 
 ## Install
 
-From this released checkout:
+From this repository checkout:
 
 ```bash
 ./install-project-local.sh /path/to/target-project
