@@ -139,7 +139,7 @@ for (const [command, handler] of [
   ["review-route-intent", "reviewRouteIntentCommand"],
   ["compose", "composeCommand"]
 ]) {
-  if (!new RegExp(`${command}[\\s\\S]*${handler}|${handler}[\\s\\S]*${command}`).test(cliDispatchText)) {
+  if (!cliDispatchText.includes(command) || !cliDispatchText.includes(handler)) {
     throw new Error(`runtime CLI must dispatch the ${command} command.`);
   }
 }
