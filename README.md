@@ -10,9 +10,17 @@ It is intended for repeatable browser work, workflow composition, and local
 agent pipelines. It is not intended for bypassing site controls, saving user
 secrets into files, or bulk scraping.
 
+Current support target: macOS happy path. Windows and Linux paths keep
+defensive compatibility guards where practical, but this released CLI does not
+claim full cross-platform support.
+
+The CLI is designed first as an agent contract surface: stable JSON, stable
+exit codes, machine-readable schema/capabilities, dry-run previews, and explicit
+artifact paths take priority over decorative terminal output.
+
 ## Install
 
-From this repository checkout:
+From this released checkout:
 
 ```bash
 ./install-project-local.sh /path/to/target-project
@@ -34,6 +42,20 @@ Claude installs to:
 
 Runtime dependencies are prepared inside the installed package's `runtime/`
 directory on first use, not at the target project root.
+
+## CLI
+
+Common discovery commands:
+
+```bash
+browser-flow help workflows
+browser-flow capabilities --json
+browser-flow schema command verify --json
+browser-flow completion bash
+```
+
+Dry-run capable commands expose `--dry-run` in schema metadata so agents can
+preview mutating work before writing artifacts.
 
 ## What You Get
 

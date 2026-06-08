@@ -107,6 +107,8 @@ test("completion exposes command-aware flags and enum values", () => {
   assert.equal(fish.status, 0, fish.stderr);
   assert.match(fish.stdout, /complete -c browser-flow -n '__fish_seen_subcommand_from verify' -l screenshots/);
   assert.match(fish.stdout, /-a 'off final steps both'/);
+  assert.doesNotMatch(fish.stdout, /-l ell\b/);
+  assert.match(fish.stdout, /__fish_seen_subcommand_from completion' -f -a 'bash zsh fish'/);
   assert.doesNotMatch(fish.stdout, /^complete -c browser-flow -l step$/m);
   assert.match(fish.stdout, /^complete -c browser-flow -n '__fish_seen_subcommand_from extract' -l step$/m);
 });

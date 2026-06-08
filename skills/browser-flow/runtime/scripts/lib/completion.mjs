@@ -27,6 +27,7 @@ function optionNames() {
   const options = new Set(["--help", "--json"]);
   for (const command of COMMANDS) {
     for (const option of command.options) {
+      if (!option.name.startsWith("--")) continue;
       options.add(option.name);
     }
   }
@@ -34,7 +35,7 @@ function optionNames() {
 }
 
 function optionNamesFor(command) {
-  return [...new Set(["--help", "--json", ...command.options.map((option) => option.name)])].sort();
+  return [...new Set(["--help", "--json", ...command.options.filter((option) => option.name.startsWith("--")).map((option) => option.name)])].sort();
 }
 
 function renderBashCompletion() {
@@ -78,6 +79,7 @@ function renderZshCompletion() {
   const enumEntries = [];
   for (const command of COMMANDS) {
     for (const option of command.options) {
+      if (!option.name.startsWith("--")) continue;
       if (option.type === "enum" && option.values.length > 0) {
         enumEntries.push(`    '${command.name} ${option.name}:${option.values.join(" ")}'`);
       }
@@ -124,9 +126,14 @@ function renderFishCompletion() {
       lines.push(`complete -c browser-flow -n '__fish_seen_subcommand_from ${command.name}' -l ${option.slice(2)}`);
     }
     for (const option of command.options) {
+      if (!option.name.startsWith("--")) continue;
       if (option.type === "enum" && option.values.length > 0) {
         lines.push(`complete -c browser-flow -n '__fish_seen_subcommand_from ${command.name}; and __fish_seen_argument -l ${option.name.slice(2)}' -a '${option.values.join(" ")}'`);
       }
+    }
+    for (const option of command.options) {
+      if (option.name.startsWith("--") || option.type !== "enum" || option.values.length === 0) continue;
+      lines.push(`complete -c browser-flow -n '__fish_seen_subcommand_from ${command.name}' -f -a '${option.values.join(" ")}'`);
     }
   }
   return lines.join("\n");
