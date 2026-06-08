@@ -138,7 +138,7 @@ only capturing a single path.
 ## 2026-05-27 - Cross-runtime surfaces, reveal semantics, screenshots, and graph context
 
 The public skill surface was then made reproducible across Codex and Claude.
-Canonical rendering and adapter projection kept one public Browser Flow entry
+Canonical rendering and adapter command generation kept one public Browser Flow entry
 while moving internal contracts behind agent-owned private playbooks.
 
 At the same time, Browser Flow started representing more visual and stateful

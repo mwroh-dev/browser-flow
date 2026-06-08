@@ -108,7 +108,7 @@ remove_stale_public_entries() {
   shopt -u nullglob
 }
 
-remove_browser_flow_projections() {
+remove_browser_flow_installs() {
   rm -rf "$target_dir/.codex/skills/browser-flow"
   rm -rf "$target_dir/.claude/browser-flow"
   rm -f "$target_dir/.claude/commands/browser-flow.md"
@@ -124,7 +124,7 @@ remove_browser_flow_projections() {
 }
 
 remove_stale_public_entries
-remove_browser_flow_projections
+remove_browser_flow_installs
 
 case "$tool" in
   codex)
