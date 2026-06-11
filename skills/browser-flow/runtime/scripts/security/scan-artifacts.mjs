@@ -229,6 +229,18 @@ function isKnownCdpOpaqueRuntimeId(input) {
       return true;
     }
   }
+  // CDP session ids recorded for multi-tab request attribution. Same opaque
+  // runtime-id class as frameId: random per launch, no authority, useless
+  // off-machine.
+  if (
+    input.fieldName === "sessionId" &&
+    (input.artifactPath === "network-summary.json" ||
+      input.artifactPath === "events/journal.jsonl" ||
+      input.artifactPath === "raw-events.jsonl") &&
+    /^\[\d+\]\.sessionId$/.test(input.schemaPath)
+  ) {
+    return true;
+  }
   return input.fieldName === "targetId" &&
     input.artifactPath === "reports/verification.json" &&
     /^replayViewport\.appliedTargets\[\d+\]\.targetId$/.test(input.schemaPath);

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { createBrowserSession } from "../cdp/browser-session.mjs";
 import { installLifecycleWatchdog } from "../cdp/watchdogs/lifecycle.mjs";
@@ -283,6 +283,14 @@ export async function verifyRun(runId, options) {
     }
   }
 
+  // Invalidate the whole prior report set, not just verification.json — a
+  // crash mid-verify must not leave a new verification.json paired with a
+  // previous run's security.json/summary (promote/extract gate on those
+  // files independently).
+  rmSync(runPaths.verificationPath, { force: true });
+  rmSync(resolve(runPaths.reportsDir, "verification-summary.json"), { force: true });
+  rmSync(runPaths.securityPath, { force: true });
+
   /** @type {VerificationReport} */
   let report;
   try {
@@ -390,6 +398,11 @@ export async function verifyRun(runId, options) {
   // Persistence boundary (registry upsert) remains the constitutional
   // invariant #1 enforcement point.
   const scanOpts = { unmasked: workflowUnmasked };
+  // First scan: populate securityOk in the intermediate report and persist it.
+  // The second scan (below) re-scans after the write so that subsequent logic
+  // (buildPublicReadPromotion, deriveVerificationOutcomes) operates on a
+  // security result that reflects the fully-written verification artifact.
+  // Intentional double scan — not a bug.
   let security = scanArtifacts(runPaths.runRoot, runPaths.securityPath, scanOpts);
   finalReport = parseVerificationArtifact(
     {
@@ -399,6 +412,8 @@ export async function verifyRun(runId, options) {
     runPaths.verificationPath
   );
   writeJson(runPaths.verificationPath, finalReport);
+  // Second scan: re-scan after the write so downstream logic sees a result
+  // consistent with the on-disk state of verificationPath.
   security = scanArtifacts(runPaths.runRoot, runPaths.securityPath, scanOpts);
   const securityClean = isSecurityClean(security);
   const proofFailed = Array.isArray(report.proofChecks) &&

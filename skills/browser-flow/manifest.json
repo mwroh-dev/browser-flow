@@ -1,7 +1,7 @@
 {
   "name": "browser-flow",
   "surface": "repo_skill",
-  "description": "Single-entry skill for capturing a local browser demo and producing a verified workflow artifact.",
+  "description": "Single-entry skill for capturing a local browser demo and producing a verified workflow artifact with path.yaml, recipe.yaml, and a runnable CDP-direct replay.",
   "prompt": "prompt.md",
   "references": [
     "references/security-policy.md",

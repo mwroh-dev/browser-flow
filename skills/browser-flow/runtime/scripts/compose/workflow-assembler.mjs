@@ -38,10 +38,28 @@ export function assembleComposedWorkflow({
       typeof verification.expectedNetwork.method === "string" &&
       verification.expectedNetwork.method.toUpperCase() === "GET"
     ) {
-      verification.expectedNetwork = {
-        ...verification.expectedNetwork,
-        url: finalUrl
-      };
+      // Only update the expectedNetwork URL when the pathname matches the
+      // derived finalUrl — a different pathname means a distinct API endpoint
+      // that should not be silently overwritten by the new finalUrl.
+      const existingNetUrl = typeof verification.expectedNetwork.url === "string"
+        ? verification.expectedNetwork.url : "";
+      let samePathname = true;
+      try {
+        // Workflow URLs are often relative ("/api/filter?topic=…"), so parse
+        // with a base — bare new URL() throws on those and would permanently
+        // block the update this guard is meant to allow.
+        const base = "http://127.0.0.1";
+        samePathname = new URL(existingNetUrl, base).pathname === new URL(finalUrl, base).pathname;
+      } catch (_) {
+        // non-parseable URL — keep conservative default (do not overwrite)
+        samePathname = false;
+      }
+      if (samePathname) {
+        verification.expectedNetwork = {
+          ...verification.expectedNetwork,
+          url: finalUrl
+        };
+      }
     }
   }
   return {

@@ -1,3 +1,5 @@
+import { SECRET_FIELD_PATTERN } from "../security/patterns.mjs";
+
 import { locatorCaptureSource } from "./locator-capture.mjs";
 
 export const recorderInitScript =
@@ -5,8 +7,10 @@ export const recorderInitScript =
   "  if (window.__browserFlowRecorderInstalled) { return; }\n" +
   "  window.__browserFlowRecorderInstalled = true;\n" +
   locatorCaptureSource + "\n" +
+  // Inject the shared pattern so the page-context copy can never drift
+  // from security/patterns.mjs.
+  "  const SECRET_FIELD_PATTERN = " + SECRET_FIELD_PATTERN.toString() + ";\n" +
   String.raw`
-  const SECRET_FIELD_PATTERN = /(pass(word)?|secret|token|csrf|session|auth|cookie|key)/i;
 
   function cleanText(value) {
     return String(value || "").replace(/\s+/g, " ").trim().slice(0, 120);

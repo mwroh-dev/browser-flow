@@ -18,7 +18,7 @@
 
 import { parse, serialize } from "parse5";
 
-const SECRET_FIELD_PATTERN = /(pass(word)?|secret|token|csrf|session|auth|cookie|key)/i;
+import { SECRET_FIELD_PATTERN } from "../security/patterns.mjs";
 const EMAIL_PATTERN = /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g;
 const SECRET_CONTEXT_DEPTH = 5;
 const SECRET_FIELD_TAGS = new Set(["input", "textarea", "select"]);

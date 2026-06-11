@@ -148,13 +148,7 @@ export function sanitizeUrl(rawUrl, options = {}) {
       return "<non-local-url>";
     }
 
-    url.username = "";
-    url.password = "";
-    for (const [name, value] of [...url.searchParams.entries()]) {
-      if (isSensitiveFieldName(name) || looksLikeSecretValue(value)) {
-        url.searchParams.set(name, "<redacted>");
-      }
-    }
+    redactUrlCredentialsAndParams(url);
 
     if (protocolRelative) {
       return `//${url.host}${url.pathname}${url.search}${url.hash}`;
@@ -164,6 +158,29 @@ export function sanitizeUrl(rawUrl, options = {}) {
     }
     return url.toString();
   } catch {
-    return rawUrl;
+    // Last resort for schemeless strings ("example.com/page?token=x"):
+    // parse against a dummy base and redact, so the value keeps its shape
+    // without leaking. Returning the raw string here is never an option —
+    // that was the original secret-leak path this catch replaced.
+    try {
+      const fallback = new URL(rawUrl, "http://127.0.0.1");
+      redactUrlCredentialsAndParams(fallback);
+      return `${fallback.pathname}${fallback.search}${fallback.hash}`;
+    } catch {
+      return "<unparseable-url>";
+    }
+  }
+}
+
+/**
+ * @param {URL} url
+ */
+function redactUrlCredentialsAndParams(url) {
+  url.username = "";
+  url.password = "";
+  for (const [name, value] of [...url.searchParams.entries()]) {
+    if (isSensitiveFieldName(name) || looksLikeSecretValue(value)) {
+      url.searchParams.set(name, "<redacted>");
+    }
   }
 }

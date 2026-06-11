@@ -74,6 +74,9 @@ async function main() {
   const snapshotMode = control.snapshotDom === true;
   const captureMode = control.captureMode === "strict" ? "strict" : "normal";
   let snapshotCounter = 0;
+  // Serialization queue: prevents out-of-order snapshot writes when multiple
+  // persistDomSnapshot calls fire concurrently.
+  let snapshotQueue = Promise.resolve();
   /** @type {Array<{ index: number, url: string, timestamp: number, filename: string }>} */
   const snapshotEntries = [];
   /** @type {Array<{ url: string, skeleton: Array<{ role: string, name: string, structuralKey: string }> }>} */
@@ -140,10 +143,12 @@ async function main() {
         lastUserActionTabOrdinal = ord;
       }
       if (snapshotMode && meta?.targetId && isUserActionEvent(tagged)) {
-        persistDomSnapshot(meta.targetId)
-          .catch((snapshotError) => {
+        const captureTargetId = meta.targetId;
+        snapshotQueue = snapshotQueue.then(() =>
+          persistDomSnapshot(captureTargetId).catch((snapshotError) => {
             console.error("pre-action snapshot capture failed:", snapshotError instanceof Error ? snapshotError.message : String(snapshotError));
-          });
+          })
+        );
       }
       rawEvents.push(/** @type {any} */ (tagged));
       appendCaptureJournal("recorder", tagged, control.unmasked === true);
@@ -199,33 +204,38 @@ async function main() {
     });
   }
 
+  /** @type {Array<() => void>} */
+  const frameNavigatedUnsubs = [];
+
   // snapshot mode — listen for Page.frameNavigated (main frame only)
   // replacing page.on("framenavigated") from Playwright.
   if (snapshotMode) {
-    session.client.on("Page.frameNavigated", async (params, sessionIdArg) => {
+    frameNavigatedUnsubs.push(session.client.on("Page.frameNavigated", (params, sessionIdArg) => {
       const p = /** @type {any} */ (params);
       // Only capture main-frame navigations (parentId absent or null/undefined).
       if (p.frame?.parentId !== undefined && p.frame?.parentId !== null) {
         return;
       }
-      try {
-        // Brief settle wait for domcontentloaded — best-effort.
-        await delay(200);
-        // Resolve the targetId for this session.
-        const sid = /** @type {string | undefined} */ (sessionIdArg);
-        const targetId = sid ? findTargetIdBySessionId(session, sid) : null;
-        await persistDomSnapshot(targetId);
-      } catch (snapshotError) {
-        // Best-effort. Snapshot mode is opt-in debug data; do not fail
-        // the capture run if one snapshot cannot be persisted.
-        console.error("snapshot capture failed:", snapshotError instanceof Error ? snapshotError.message : String(snapshotError));
-      }
-    });
+      const sid = /** @type {string | undefined} */ (sessionIdArg);
+      snapshotQueue = snapshotQueue.then(async () => {
+        try {
+          // Brief settle wait for domcontentloaded — best-effort.
+          await delay(200);
+          // Resolve the targetId for this session.
+          const targetId = sid ? findTargetIdBySessionId(session, sid) : null;
+          await persistDomSnapshot(targetId);
+        } catch (snapshotError) {
+          // Best-effort. Snapshot mode is opt-in debug data; do not fail
+          // the capture run if one snapshot cannot be persisted.
+          console.error("snapshot capture failed:", snapshotError instanceof Error ? snapshotError.message : String(snapshotError));
+        }
+      });
+    }));
   }
 
   // affordance skeleton capture — unconditional (always-on),
   // read-only enumerate only, NO clicks/navigation.
-  session.client.on("Page.frameNavigated", async (params, sessionIdArg) => {
+  frameNavigatedUnsubs.push(session.client.on("Page.frameNavigated", async (params, sessionIdArg) => {
     const p = /** @type {any} */ (params);
     if (p.frame?.parentId !== undefined && p.frame?.parentId !== null) return; // main frame only
     try {
@@ -248,7 +258,7 @@ async function main() {
     } catch (skeletonError) {
       console.error("skeleton capture failed:", skeletonError instanceof Error ? skeletonError.message : String(skeletonError));
     }
-  });
+  }));
 
   // Navigate to the start URL using lifecycle watchdog.
   const pageTargets = session.sessionManager.listPageTargets();
@@ -273,6 +283,12 @@ async function main() {
         return;
       }
       await settleCapture(rawEvents, networkEvents);
+      // Stop snapshot producers, then flush queued snapshot work so the
+      // manifest below includes every snapshot and none of the queued tasks
+      // runs against the disposed session.
+      for (const unsub of frameNavigatedUnsubs) unsub();
+      frameNavigatedUnsubs.length = 0;
+      await Promise.race([snapshotQueue, delay(3_000)]);
       const currentTargets = await enrichCaptureTargetsWithLiveUrls(
         session.sessionManager.listPageTargets(),
         dom
@@ -666,13 +682,60 @@ function lastNavigateUrlFromEvents(events) {
 }
 
 /**
+ * Returns the count of recently-sent requestIds that have not completed
+ * (no responseReceived or loadingFinished event). Requests older than the
+ * age cutoff are treated as abandoned: the network watchdog does not record
+ * Network.loadingFailed, so a failed/canceled request would otherwise stay
+ * "pending" for the whole session and pin the settle wait at its cap.
+ * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} networkEvents
+ * @param {number} now
+ */
+function countPendingRequests(networkEvents, now) {
+  const PENDING_AGE_CUTOFF_MS = 10_000;
+  // Note on units: event timestamps are Date.now() epoch ms stamped by the
+  // network watchdog — raw CDP monotonic-seconds timestamps are never stored.
+  // Keys are session-qualified because CDP requestIds are only unique per
+  // tab: without the qualifier, tab B's response would mark tab A's
+  // same-numbered request as completed.
+  /** @type {Map<string, number>} */
+  const sentAt = new Map();
+  /** @type {Set<string>} */
+  const completed = new Set();
+  for (const ev of networkEvents) {
+    const e = /** @type {any} */ (ev);
+    if (typeof e.requestId !== "string") continue;
+    const key = `${typeof e.sessionId === "string" ? e.sessionId : ""}:${e.requestId}`;
+    if (e.type === "network.request") {
+      sentAt.set(key, typeof e.timestamp === "number" ? e.timestamp : now);
+    } else if (e.type === "network.response" || e.type === "network.loadingFinished") {
+      completed.add(key);
+    }
+  }
+  let pending = 0;
+  for (const [id, ts] of sentAt) {
+    if (!completed.has(id) && now - ts <= PENDING_AGE_CUTOFF_MS) pending += 1;
+  }
+  return pending;
+}
+
+/**
+ * Settle = event signature unchanged for 150ms AND no in-flight network
+ * request. The pending check is part of the stability condition (not a
+ * follow-up phase) so a response still in flight while events are quiet —
+ * the case this exists for — actually delays the settle.
  * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} rawEvents
  * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} networkEvents
  */
 async function settleCapture(rawEvents, networkEvents) {
+  const TICK_MS = 50;
+  const STABLE_TARGET_MS = 150;
+  const UNSTABLE_BUDGET_MS = 1_000; // page never goes quiet — original cap
+  const PENDING_BUDGET_MS = 5_000; // quiet page, response still in flight
   let lastSignature = "";
   let stableMs = 0;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  let unstableWaitedMs = 0;
+  let pendingWaitedMs = 0;
+  for (;;) {
     const signature = JSON.stringify({
       rawCount: rawEvents.length,
       networkCount: networkEvents.length,
@@ -681,16 +744,22 @@ async function settleCapture(rawEvents, networkEvents) {
     });
 
     if (signature === lastSignature) {
-      stableMs += 50;
-      if (stableMs >= 150) {
-        return;
-      }
+      stableMs += TICK_MS;
     } else {
       lastSignature = signature;
       stableMs = 0;
     }
 
-    await delay(50);
+    if (stableMs >= STABLE_TARGET_MS) {
+      if (countPendingRequests(networkEvents, Date.now()) === 0) return;
+      pendingWaitedMs += TICK_MS;
+      if (pendingWaitedMs >= PENDING_BUDGET_MS) return;
+    } else {
+      unstableWaitedMs += TICK_MS;
+      if (unstableWaitedMs >= UNSTABLE_BUDGET_MS) return;
+    }
+
+    await delay(TICK_MS);
   }
 }
 

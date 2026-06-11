@@ -44,7 +44,13 @@ export async function createSessionManager(client) {
     targetIdToInfo.set(info.targetId, info);
     targetIdToSessionId.set(info.targetId, p.sessionId);
     if (info.type === "page") {
-      for (const h of attachedHandlers) h(info, p.sessionId);
+      for (const h of attachedHandlers) {
+        try {
+          h(info, p.sessionId);
+        } catch (handlerError) {
+          console.error("attachedHandlers error:", handlerError instanceof Error ? handlerError.message : String(handlerError));
+        }
+      }
     }
   }));
 
@@ -54,7 +60,13 @@ export async function createSessionManager(client) {
     if (targetId) {
       targetIdToInfo.delete(targetId);
       targetIdToSessionId.delete(targetId);
-      for (const h of detachedHandlers) h(targetId);
+      for (const h of detachedHandlers) {
+        try {
+          h(targetId);
+        } catch (handlerError) {
+          console.error("detachedHandlers error:", handlerError instanceof Error ? handlerError.message : String(handlerError));
+        }
+      }
     }
   }));
 

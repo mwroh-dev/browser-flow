@@ -617,9 +617,11 @@ export function compileRun(runId) {
   // reveal-agent review when the follow-up is ambiguous/missing.
   const revealCandidates = freezeRevealSemantics(steps);
 
-  // same-page layered surface/provider hints. Additive-only: runner still
-  // executes steps individually, but resolver/consumers can use this context to
-  // avoid cross-group ambiguities on layered controls.
+  // same-page layered surface/provider hints applied a second time after
+  // routeReview may have replaced the steps array (steps = routeReview.steps
+  // at line 596). The first call at line 561 annotated the pre-route-review
+  // steps; this call re-annotates the authoritative post-review array.
+  // Intentional double call — not a bug.
   applySurfaceAndProviderContexts(steps);
 
   // additive semantic grouping metadata for higher-level consumers. Runtime

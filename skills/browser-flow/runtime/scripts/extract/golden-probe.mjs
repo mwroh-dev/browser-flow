@@ -8,6 +8,11 @@
 
 // >= this fraction drop vs golden cardinality flags a suspicious result as drift.
 export const CARDINALITY_DROP_THRESHOLD = 0.5;
+// >= this fraction surge vs golden cardinality flags a suspicious result as drift.
+export const CARDINALITY_SURGE_THRESHOLD = 2.0;
+// Ratio thresholds are meaningless on tiny goldens (1 → 2 rows is a 2x
+// "surge"), so the surge check only applies at or above this base.
+export const CARDINALITY_SURGE_MIN_BASE = 3;
 
 /**
  * @param {{ rows: Record<string, unknown>[], cardinality: number, containerResolved: boolean }} extraction
@@ -25,6 +30,14 @@ export function classify(extraction, golden) {
           status: "drift",
           rows,
           reason: `cardinality ${cardinality} dropped >=${CARDINALITY_DROP_THRESHOLD * 100}% from golden ${golden.cardinality}`
+        };
+      }
+      const surge = cardinality / golden.cardinality;
+      if (golden.cardinality >= CARDINALITY_SURGE_MIN_BASE && surge >= CARDINALITY_SURGE_THRESHOLD) {
+        return {
+          status: "drift",
+          rows,
+          reason: `cardinality ${cardinality} surged >=${CARDINALITY_SURGE_THRESHOLD}x from golden ${golden.cardinality}`
         };
       }
     }

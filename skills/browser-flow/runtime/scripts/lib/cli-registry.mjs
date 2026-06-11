@@ -147,10 +147,12 @@ export function validateOptions(metadata, options) {
       throw missingRequiredOption(`${metadata.name} requires ${option.name}${option.value ? ` <${option.value}>` : ""}.`, metadata.name);
     }
     if (value === undefined) continue;
-    if (option.type === "boolean" && value !== true) {
+    if (option.type === "boolean" && typeof value !== "boolean") {
       throw invalidUsage(`${metadata.name} option ${option.name} does not accept a value.`, [`browser-flow ${metadata.name} --help`]);
     }
-    if ((option.type === "string" || option.type === "enum") && value === true) {
+    if ((option.type === "string" || option.type === "enum") && typeof value === "boolean") {
+      // true: flag given without a value; false: a --no-<flag> negation,
+      // which only boolean options support.
       throw invalidUsage(`${metadata.name} option ${option.name} requires a value.`, [`browser-flow ${metadata.name} --help`]);
     }
     if (option.type === "enum" && typeof value === "string" && !option.values.includes(value)) {

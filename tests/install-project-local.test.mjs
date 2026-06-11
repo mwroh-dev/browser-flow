@@ -63,6 +63,38 @@ test("claude install writes command and private skill paths that point at the co
   }
 });
 
+test("codex install with trailing slash on target path installs correctly", () => {
+  const target = makeTarget();
+  try {
+    execFileSync(resolve(repoRoot, "install-project-local.sh"), [`${target}/`], {
+      cwd: repoRoot,
+      stdio: "pipe"
+    });
+
+    const skillRoot = resolve(target, ".codex/skills/browser-flow");
+    assert.equal(existsSync(resolve(skillRoot, "SKILL.md")), true);
+    // node_modules must not be copied into the installed skill
+    assert.equal(existsSync(resolve(skillRoot, "runtime/node_modules")), false);
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+test("claude install with trailing slash on target path installs correctly", () => {
+  const target = makeTarget();
+  try {
+    execFileSync(resolve(repoRoot, "install-project-local.sh"), ["--tool", "claude", `${target}/`], {
+      cwd: repoRoot,
+      stdio: "pipe"
+    });
+
+    const commandPath = resolve(target, ".claude/commands/browser-flow.md");
+    assert.equal(existsSync(commandPath), true);
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
 test("claude command renderer rewrites only path tokens and normalizes line endings", () => {
   const target = makeTarget();
   try {

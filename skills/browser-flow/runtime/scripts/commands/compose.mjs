@@ -27,7 +27,7 @@ function appendComposeJournal(journalPath, entry) {
   appendFileSync(journalPath, `${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`, "utf8");
 }
 
-const ALLOWED_BLOCKED_REASONS = new Set(["unreachable_goal", "policy_blocked", "graph_disconnect"]);
+const ALLOWED_BLOCKED_REASONS = new Set(["unreachable_goal", "policy_blocked", "graph_disconnect", "iteration_limit"]);
 
 function normalizeBlockedReason(reason) {
   return ALLOWED_BLOCKED_REASONS.has(reason) ? reason : "unreachable_goal";

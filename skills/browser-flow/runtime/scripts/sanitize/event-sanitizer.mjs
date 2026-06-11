@@ -164,6 +164,10 @@ export function sanitizeEvent(event, options = {}) {
   if (event.type === "network.request" || event.type === "network.response" || event.type === "network.loadingFinished") {
     return {
       ...base,
+      // Session attribution for multi-tab runs — CDP requestIds are only
+      // unique per session, so consumers need this to join events safely.
+      // Opaque runtime id, same disclosure class as frameId in `base`.
+      sessionId: typeof event.sessionId === "string" && event.sessionId ? event.sessionId : undefined,
       method: event.method ?? "GET",
       status: event.status ?? 0,
       headers: sanitizeHeaders(event.headers ?? {})

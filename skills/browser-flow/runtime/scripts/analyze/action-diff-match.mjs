@@ -107,7 +107,10 @@ function sameCapturePage(a, b, fixture) {
   if (!sameTab(a, b)) return false;
   const aUrl = typeof a.url === "string" ? a.url : "";
   const bUrl = typeof b.url === "string" ? b.url : "";
-  if (!aUrl || !bUrl) return true;
+  // Both URLs absent: no page information to distinguish — treat as same page.
+  // One absent, one present: ambiguous — do not assume same page (conservative).
+  if (!aUrl && !bUrl) return true;
+  if (!aUrl || !bUrl) return false;
   if (aUrl === bUrl) return true;
   return derivePageKey(aUrl, fixture) === derivePageKey(bUrl, fixture);
 }

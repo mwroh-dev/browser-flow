@@ -1,4 +1,4 @@
-import { closeSync, existsSync, openSync, renameSync, rmSync } from "node:fs";
+import { closeSync, existsSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { getPaths } from "../lib/config.mjs";
 import { readJson, writeJson } from "../lib/fs.mjs";
@@ -158,6 +158,9 @@ function validateExternalDataResult(entry) {
   }
 }
 
+/** Stale lock threshold in milliseconds. A lock file older than this is assumed orphaned. */
+const STALE_LOCK_MS = 30_000;
+
 /**
  * @param {string} lockPath
  */
@@ -169,6 +172,27 @@ function acquireLock(lockPath) {
       const message = error instanceof Error ? error.message : String(error);
       if (!message.includes("EEXIST")) {
         throw error;
+      }
+      // Steal stale locks via rename, not rmSync: rename moves exactly one
+      // file, so two waiters cannot both "win", and the inode check below
+      // detects a lock that was re-created between stat and rename so a
+      // live lock is never deleted (the rmSync version had that TOCTOU).
+      try {
+        const seen = statSync(lockPath);
+        if (Date.now() - seen.mtimeMs > STALE_LOCK_MS) {
+          const stalePath = `${lockPath}.stale-${process.pid}`;
+          renameSync(lockPath, stalePath);
+          const grabbed = statSync(stalePath);
+          if (grabbed.ino === seen.ino && Date.now() - grabbed.mtimeMs > STALE_LOCK_MS) {
+            rmSync(stalePath, { force: true });
+            continue; // stolen — retry openSync immediately
+          }
+          // A fresh lock raced in between stat and rename; restore it.
+          renameSync(stalePath, lockPath);
+        }
+      } catch {
+        // Lock vanished or another stealer won the rename — treat like a
+        // held lock and back off instead of busy-spinning.
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
     }

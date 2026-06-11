@@ -72,8 +72,16 @@ export async function connectCdpClient(options) {
       return () => criAsEmitter.removeListener(event, handler);
     },
     async close() {
+      // Drop subscribers first, then install the error sink so it survives
+      // until close finishes — an error event on a listener-less emitter
+      // would crash the process.
       criAsEmitter.removeAllListeners();
-      await cri.close();
+      criAsEmitter.on("error", () => {});
+      try {
+        await cri.close();
+      } finally {
+        criAsEmitter.removeAllListeners();
+      }
     },
   };
 }

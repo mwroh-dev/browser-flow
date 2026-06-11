@@ -69,9 +69,9 @@ export async function installActionWatchdog(session) {
     // Coords-based click via Input.dispatchMouseEvent
     try {
       const box = /** @type {any} */ (await client.send("DOM.getBoxModel", { backendNodeId }, sessionId));
-      const [x1, y1, x2, , , y3] = box.model.content;
-      const x = (x1 + x2) / 2;
-      const y = (y1 + y3) / 2;
+      const q = box.model.content; // [x1,y1, x2,y2, x3,y3, x4,y4]
+      const x = (q[0] + q[2] + q[4] + q[6]) / 4;
+      const y = (q[1] + q[3] + q[5] + q[7]) / 4;
       await client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none" }, sessionId);
       await client.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 }, sessionId);
       await client.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 }, sessionId);

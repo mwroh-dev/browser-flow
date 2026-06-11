@@ -20,6 +20,8 @@ artifact paths take priority over decorative terminal output.
 
 ## Install
 
+Requires Node.js 22 or later.
+
 From this repository checkout:
 
 ```bash

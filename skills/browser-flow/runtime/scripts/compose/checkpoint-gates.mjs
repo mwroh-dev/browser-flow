@@ -14,9 +14,10 @@ export function advanceCheckpoint({ current, ok, blockedReason = "none" }) {
   if (!ok) {
     return { status: "broken", blockedReason, next: null };
   }
+  const next = index + 1 < ORDER.length ? ORDER[index + 1] : null;
   return {
-    status: "in-progress",
+    status: next !== null ? "in-progress" : "completed",
     blockedReason: "none",
-    next: index + 1 < ORDER.length ? ORDER[index + 1] : null
+    next
   };
 }
