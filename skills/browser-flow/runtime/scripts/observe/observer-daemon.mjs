@@ -692,6 +692,11 @@ function lastNavigateUrlFromEvents(events) {
  */
 function countPendingRequests(networkEvents, now) {
   const PENDING_AGE_CUTOFF_MS = 10_000;
+  // Note on units: event timestamps are Date.now() epoch ms stamped by the
+  // network watchdog — raw CDP monotonic-seconds timestamps are never stored.
+  // Keys are session-qualified because CDP requestIds are only unique per
+  // tab: without the qualifier, tab B's response would mark tab A's
+  // same-numbered request as completed.
   /** @type {Map<string, number>} */
   const sentAt = new Map();
   /** @type {Set<string>} */
@@ -699,10 +704,11 @@ function countPendingRequests(networkEvents, now) {
   for (const ev of networkEvents) {
     const e = /** @type {any} */ (ev);
     if (typeof e.requestId !== "string") continue;
+    const key = `${typeof e.sessionId === "string" ? e.sessionId : ""}:${e.requestId}`;
     if (e.type === "network.request") {
-      sentAt.set(e.requestId, typeof e.timestamp === "number" ? e.timestamp : now);
+      sentAt.set(key, typeof e.timestamp === "number" ? e.timestamp : now);
     } else if (e.type === "network.response" || e.type === "network.loadingFinished") {
-      completed.add(e.requestId);
+      completed.add(key);
     }
   }
   let pending = 0;

@@ -364,3 +364,45 @@ test("extract paged path consumes the propagated containerResolved, not a row-co
   assert.match(source, /containerResolved: paged\.containerResolved/);
   assert.doesNotMatch(source, /containerResolved: paged\.cardinality > 0/);
 });
+
+// ── Gemini round-2 sweep: session-scoped CDP ids must be session-qualified ──
+
+test("network watchdog session-qualifies request keys and records sessionId on events", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/cdp/watchdogs/network.mjs"), "utf8");
+  assert.match(source, /requestKey\(sid, p\.requestId\)/);
+  const sessionIdFields = source.match(/sessionId: typeof sid === "string" \? sid : undefined/g) ?? [];
+  assert.ok(sessionIdFields.length >= 3, "all three network events must carry sessionId");
+});
+
+test("proxy-auth retry counter cannot collide across sessions", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/cdp/watchdogs/proxy-auth.mjs"), "utf8");
+  const composite = source.match(/\$\{sid \?\? ""\}:\$\{String\(p\.requestId\)\}/g) ?? [];
+  assert.ok(composite.length >= 2, "authRequired and requestPaused must both use the composite key");
+  assert.doesNotMatch(source, /authRetryCount\.(get|set|delete)\(requestId\)/);
+});
+
+test("pending-request settle counts per session so tab B cannot complete tab A's request", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/observe/observer-daemon.mjs"), "utf8");
+  assert.match(source, /\$\{typeof e\.sessionId === "string" \? e\.sessionId : ""\}:\$\{e\.requestId\}/);
+});
+
+test("sanitized network events preserve sessionId for multi-tab attribution", async () => {
+  const { sanitizeEvent } = await import("../scripts/sanitize/event-sanitizer.mjs");
+  const out = sanitizeEvent({ type: "network.request", timestamp: 1, url: "http://127.0.0.1/x", sessionId: "SESS1", method: "GET", headers: {} }, {});
+  assert.equal(out.sessionId, "SESS1");
+});
+
+// Timestamp-unit drift guard: watchdog events must stay on Date.now() epoch
+// ms — raw CDP monotonic-seconds timestamps must never be stored or mixed.
+test("network events are stamped with Date.now, never raw CDP timestamps", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/cdp/watchdogs/network.mjs"), "utf8");
+  const stamps = source.match(/timestamp: Date\.now\(\)/g) ?? [];
+  assert.ok(stamps.length >= 3);
+  assert.doesNotMatch(source, /timestamp: p\.timestamp|wallTime/);
+});
+
+test("scan-artifacts classifies recorded network sessionIds as opaque runtime ids", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/security/scan-artifacts.mjs"), "utf8");
+  assert.match(source, /fieldName === "sessionId"/);
+  assert.match(source, /network-summary\.json/);
+});

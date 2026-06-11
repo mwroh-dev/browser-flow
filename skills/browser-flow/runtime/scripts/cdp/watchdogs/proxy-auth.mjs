@@ -46,11 +46,13 @@ export async function installProxyAuthWatchdog(session, credentials) {
   off.push(client.on("Fetch.authRequired", (params, sessionIdArg) => {
     const p = /** @type {any} */ (params);
     const sid = sessionIdArg ?? p.sessionId;
-    const requestId = String(p.requestId);
-    const retries = (authRetryCount.get(requestId) ?? 0) + 1;
-    authRetryCount.set(requestId, retries);
+    // requestIds are only unique per session — qualify the key so two tabs
+    // with the same requestId cannot share a retry counter.
+    const retryKey = `${sid ?? ""}:${String(p.requestId)}`;
+    const retries = (authRetryCount.get(retryKey) ?? 0) + 1;
+    authRetryCount.set(retryKey, retries);
     if (retries > MAX_AUTH_RETRIES) {
-      authRetryCount.delete(requestId);
+      authRetryCount.delete(retryKey);
       client.send("Fetch.continueWithAuth", {
         requestId: p.requestId,
         authChallengeResponse: { response: "CancelAuth" }
@@ -73,7 +75,7 @@ export async function installProxyAuthWatchdog(session, credentials) {
   off.push(client.on("Fetch.requestPaused", (params, sessionIdArg) => {
     const p = /** @type {any} */ (params);
     const sid = sessionIdArg ?? p.sessionId;
-    authRetryCount.delete(String(p.requestId));
+    authRetryCount.delete(`${sid ?? ""}:${String(p.requestId)}`);
     client.send("Fetch.continueRequest", { requestId: p.requestId }, sid).catch(() => {});
   }));
 
