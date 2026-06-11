@@ -21,7 +21,9 @@ const requiredSkillFiles = [
   "references/extract-operation.md",
   "references/compose-boundary.md",
   "references/commit-protocol.md",
-  "references/registry-contract.md"
+  "references/registry-contract.md",
+  "agents/orchestrator/playbooks/composer-agent.md",
+  "runtime/knowledge/registry/workflows.json"
 ];
 
 const agentNames = ["orchestrator", "capture", "analyzer", "generator", "verifier", "extractor"];

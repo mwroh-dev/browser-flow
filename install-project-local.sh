@@ -43,6 +43,8 @@ if [ -z "$target_dir" ]; then
   exit 64
 fi
 
+target_dir=${target_dir%/}
+
 case "$tool" in
   codex|claude) ;;
   *)
@@ -77,6 +79,8 @@ copy_dir() {
   rm -rf "$dest_dir"
   mkdir -p "$(dirname -- "$dest_dir")"
   cp -R "$source_dir" "$dest_dir"
+  rm -rf "$dest_dir/runtime/node_modules"
+  find "$dest_dir" -name ".DS_Store" -delete
 }
 
 render_claude_command() {
