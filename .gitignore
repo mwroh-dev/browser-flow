@@ -7,3 +7,4 @@ profiles/
 _temp/
 .claude/
 .pii-identities
+tasks/
