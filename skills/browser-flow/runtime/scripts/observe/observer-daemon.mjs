@@ -74,6 +74,9 @@ async function main() {
   const snapshotMode = control.snapshotDom === true;
   const captureMode = control.captureMode === "strict" ? "strict" : "normal";
   let snapshotCounter = 0;
+  // Serialization queue: prevents out-of-order snapshot writes when multiple
+  // persistDomSnapshot calls fire concurrently.
+  let snapshotQueue = Promise.resolve();
   /** @type {Array<{ index: number, url: string, timestamp: number, filename: string }>} */
   const snapshotEntries = [];
   /** @type {Array<{ url: string, skeleton: Array<{ role: string, name: string, structuralKey: string }> }>} */
@@ -140,10 +143,12 @@ async function main() {
         lastUserActionTabOrdinal = ord;
       }
       if (snapshotMode && meta?.targetId && isUserActionEvent(tagged)) {
-        persistDomSnapshot(meta.targetId)
-          .catch((snapshotError) => {
+        const captureTargetId = meta.targetId;
+        snapshotQueue = snapshotQueue.then(() =>
+          persistDomSnapshot(captureTargetId).catch((snapshotError) => {
             console.error("pre-action snapshot capture failed:", snapshotError instanceof Error ? snapshotError.message : String(snapshotError));
-          });
+          })
+        );
       }
       rawEvents.push(/** @type {any} */ (tagged));
       appendCaptureJournal("recorder", tagged, control.unmasked === true);
@@ -199,33 +204,38 @@ async function main() {
     });
   }
 
+  /** @type {Array<() => void>} */
+  const frameNavigatedUnsubs = [];
+
   // snapshot mode — listen for Page.frameNavigated (main frame only)
   // replacing page.on("framenavigated") from Playwright.
   if (snapshotMode) {
-    session.client.on("Page.frameNavigated", async (params, sessionIdArg) => {
+    frameNavigatedUnsubs.push(session.client.on("Page.frameNavigated", (params, sessionIdArg) => {
       const p = /** @type {any} */ (params);
       // Only capture main-frame navigations (parentId absent or null/undefined).
       if (p.frame?.parentId !== undefined && p.frame?.parentId !== null) {
         return;
       }
-      try {
-        // Brief settle wait for domcontentloaded — best-effort.
-        await delay(200);
-        // Resolve the targetId for this session.
-        const sid = /** @type {string | undefined} */ (sessionIdArg);
-        const targetId = sid ? findTargetIdBySessionId(session, sid) : null;
-        await persistDomSnapshot(targetId);
-      } catch (snapshotError) {
-        // Best-effort. Snapshot mode is opt-in debug data; do not fail
-        // the capture run if one snapshot cannot be persisted.
-        console.error("snapshot capture failed:", snapshotError instanceof Error ? snapshotError.message : String(snapshotError));
-      }
-    });
+      const sid = /** @type {string | undefined} */ (sessionIdArg);
+      snapshotQueue = snapshotQueue.then(async () => {
+        try {
+          // Brief settle wait for domcontentloaded — best-effort.
+          await delay(200);
+          // Resolve the targetId for this session.
+          const targetId = sid ? findTargetIdBySessionId(session, sid) : null;
+          await persistDomSnapshot(targetId);
+        } catch (snapshotError) {
+          // Best-effort. Snapshot mode is opt-in debug data; do not fail
+          // the capture run if one snapshot cannot be persisted.
+          console.error("snapshot capture failed:", snapshotError instanceof Error ? snapshotError.message : String(snapshotError));
+        }
+      });
+    }));
   }
 
   // affordance skeleton capture — unconditional (always-on),
   // read-only enumerate only, NO clicks/navigation.
-  session.client.on("Page.frameNavigated", async (params, sessionIdArg) => {
+  frameNavigatedUnsubs.push(session.client.on("Page.frameNavigated", async (params, sessionIdArg) => {
     const p = /** @type {any} */ (params);
     if (p.frame?.parentId !== undefined && p.frame?.parentId !== null) return; // main frame only
     try {
@@ -248,7 +258,7 @@ async function main() {
     } catch (skeletonError) {
       console.error("skeleton capture failed:", skeletonError instanceof Error ? skeletonError.message : String(skeletonError));
     }
-  });
+  }));
 
   // Navigate to the start URL using lifecycle watchdog.
   const pageTargets = session.sessionManager.listPageTargets();
@@ -357,6 +367,7 @@ async function main() {
         ...(captureScreenshot ? { captureScreenshot } : {})
       }));
 
+      for (const unsub of frameNavigatedUnsubs) unsub();
       await session.dispose();
       if (fixtureServer) {
         await fixtureServer.close();
@@ -666,6 +677,34 @@ function lastNavigateUrlFromEvents(events) {
 }
 
 /**
+ * Returns the count of requestIds that have been sent but not yet completed
+ * (no responseReceived or loadingFinished event).
+ * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} networkEvents
+ */
+function countPendingRequests(networkEvents) {
+  /** @type {Set<string>} */
+  const sent = new Set();
+  /** @type {Set<string>} */
+  const completed = new Set();
+  for (const ev of networkEvents) {
+    const e = /** @type {any} */ (ev);
+    if (e.type === "network.request" && typeof e.requestId === "string") {
+      sent.add(e.requestId);
+    } else if (
+      (e.type === "network.response" || e.type === "network.loadingFinished") &&
+      typeof e.requestId === "string"
+    ) {
+      completed.add(e.requestId);
+    }
+  }
+  let pending = 0;
+  for (const id of sent) {
+    if (!completed.has(id)) pending += 1;
+  }
+  return pending;
+}
+
+/**
  * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} rawEvents
  * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} networkEvents
  */
@@ -691,6 +730,17 @@ async function settleCapture(rawEvents, networkEvents) {
     }
 
     await delay(50);
+  }
+
+  // After the stability loop, extend settle if there are pending network requests.
+  // Cap extension at 5 seconds to avoid infinite wait.
+  const PENDING_POLL_INTERVAL_MS = 100;
+  const PENDING_MAX_WAIT_MS = 5_000;
+  let pendingWaitMs = 0;
+  while (pendingWaitMs < PENDING_MAX_WAIT_MS) {
+    if (countPendingRequests(networkEvents) === 0) break;
+    await delay(PENDING_POLL_INTERVAL_MS);
+    pendingWaitMs += PENDING_POLL_INTERVAL_MS;
   }
 }
 

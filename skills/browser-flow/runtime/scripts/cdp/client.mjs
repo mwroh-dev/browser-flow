@@ -72,6 +72,8 @@ export async function connectCdpClient(options) {
       return () => criAsEmitter.removeListener(event, handler);
     },
     async close() {
+      // Suppress error events during close to prevent uncaught exception crashes.
+      criAsEmitter.on("error", () => {});
       criAsEmitter.removeAllListeners();
       await cri.close();
     },

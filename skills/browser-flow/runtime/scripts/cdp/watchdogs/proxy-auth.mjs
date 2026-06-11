@@ -38,9 +38,24 @@ export async function installProxyAuthWatchdog(session, credentials) {
   }));
 
   // Handle proxy auth challenges: provide credentials.
+  // Limit retries per requestId to prevent infinite auth loops on bad credentials.
+  const MAX_AUTH_RETRIES = 3;
+  /** @type {Map<string, number>} */
+  const authRetryCount = new Map();
+
   off.push(client.on("Fetch.authRequired", (params, sessionIdArg) => {
     const p = /** @type {any} */ (params);
     const sid = sessionIdArg ?? p.sessionId;
+    const requestId = String(p.requestId);
+    const retries = (authRetryCount.get(requestId) ?? 0) + 1;
+    authRetryCount.set(requestId, retries);
+    if (retries > MAX_AUTH_RETRIES) {
+      client.send("Fetch.continueWithAuth", {
+        requestId: p.requestId,
+        authChallengeResponse: { response: "CancelAuth" }
+      }, sid).catch(() => {});
+      return;
+    }
     client.send("Fetch.continueWithAuth", {
       requestId: p.requestId,
       authChallengeResponse: {
@@ -61,6 +76,7 @@ export async function installProxyAuthWatchdog(session, credentials) {
   return {
     async dispose() {
       for (const cleanup of off) cleanup();
+      authRetryCount.clear();
     }
   };
 }

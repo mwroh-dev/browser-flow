@@ -70,10 +70,13 @@ export async function resolveAtomicFpLocator(session, targetId, step) {
   }
 
   // Strategy 2: ancestor-scope via DOM.querySelector chain
+  // doc is fetched here and reused in Strategy 3 to avoid a redundant CDP round-trip.
+  /** @type {any} */
+  let cachedDoc = null;
   if (fp?.strategy === "ancestor-scope" && fp.scopeSelector) {
-    const doc = /** @type {any} */ (await session.client.send("DOM.getDocument", { depth: -1, pierce: true }, sid));
+    cachedDoc = await session.client.send("DOM.getDocument", { depth: -1, pierce: true }, sid);
     const scope = /** @type {any} */ (await session.client.send("DOM.querySelector", {
-      nodeId: doc.root.nodeId,
+      nodeId: cachedDoc.root.nodeId,
       selector: fp.scopeSelector
     }, sid));
     if (scope.nodeId) {
@@ -88,8 +91,8 @@ export async function resolveAtomicFpLocator(session, targetId, step) {
     }
   }
 
-  // Strategy 3: fallback — raw selector
-  const doc = /** @type {any} */ (await session.client.send("DOM.getDocument", { depth: -1, pierce: true }, sid));
+  // Strategy 3: fallback — raw selector (reuse doc from Strategy 2 if available)
+  const doc = cachedDoc ?? /** @type {any} */ (await session.client.send("DOM.getDocument", { depth: -1, pierce: true }, sid));
   const found = /** @type {any} */ (await session.client.send("DOM.querySelector", {
     nodeId: doc.root.nodeId,
     selector: step.selector
