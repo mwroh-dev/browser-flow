@@ -11,5 +11,5 @@ export const SENSITIVE_HEADER_NAMES = [
 ];
 
 export const SECRET_HEADER_PATTERN = new RegExp(`^(${SENSITIVE_HEADER_NAMES.join("|")})$`, "i");
-export const SECRET_FIELD_PATTERN = /(pass(word)?|secret|token|csrf|session|auth|cookie|key)/i;
+export const SECRET_FIELD_PATTERN = /(?:pass(?:word)?|secret|token|csrf|session|auth|cookie|(?:(?<=[-_])|(?<![a-zA-Z0-9]))key(?:(?=[-_])|(?![a-zA-Z0-9])))/i;
 export const HIGH_ENTROPY_PATTERN = /\b[A-Za-z0-9+=]{24,}\b/;

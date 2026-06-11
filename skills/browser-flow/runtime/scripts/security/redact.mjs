@@ -164,6 +164,6 @@ export function sanitizeUrl(rawUrl, options = {}) {
     }
     return url.toString();
   } catch {
-    return rawUrl;
+    return "<unparseable-url>";
   }
 }
