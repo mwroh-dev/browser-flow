@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, unlinkSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { createBrowserSession } from "../cdp/browser-session.mjs";
 import { installLifecycleWatchdog } from "../cdp/watchdogs/lifecycle.mjs";
@@ -283,11 +283,13 @@ export async function verifyRun(runId, options) {
     }
   }
 
-  // Remove any stale verification artifact from a previous run so that an
-  // incomplete subprocess cannot cause this run to adopt an old report.
-  if (existsSync(runPaths.verificationPath)) {
-    try { unlinkSync(runPaths.verificationPath); } catch (_) { /* ignore — best-effort */ }
-  }
+  // Invalidate the whole prior report set, not just verification.json — a
+  // crash mid-verify must not leave a new verification.json paired with a
+  // previous run's security.json/summary (promote/extract gate on those
+  // files independently).
+  rmSync(runPaths.verificationPath, { force: true });
+  rmSync(resolve(runPaths.reportsDir, "verification-summary.json"), { force: true });
+  rmSync(runPaths.securityPath, { force: true });
 
   /** @type {VerificationReport} */
   let report;

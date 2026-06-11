@@ -719,7 +719,7 @@ const ComposeSummaryV1 = z
     primaryRunId: z.string().min(1),
     sourceRuns: z.array(z.string()),
     status: z.enum(["planned", "composed", "broken"]),
-    blockedReason: z.enum(["none", "unreachable_goal", "policy_blocked", "graph_disconnect"])
+    blockedReason: z.enum(["none", "unreachable_goal", "policy_blocked", "graph_disconnect", "iteration_limit"])
   })
   .passthrough();
 

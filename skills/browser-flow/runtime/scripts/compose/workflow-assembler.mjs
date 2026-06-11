@@ -45,7 +45,11 @@ export function assembleComposedWorkflow({
         ? verification.expectedNetwork.url : "";
       let samePathname = true;
       try {
-        samePathname = new URL(existingNetUrl).pathname === new URL(finalUrl).pathname;
+        // Workflow URLs are often relative ("/api/filter?topic=…"), so parse
+        // with a base — bare new URL() throws on those and would permanently
+        // block the update this guard is meant to allow.
+        const base = "http://127.0.0.1";
+        samePathname = new URL(existingNetUrl, base).pathname === new URL(finalUrl, base).pathname;
       } catch (_) {
         // non-parseable URL — keep conservative default (do not overwrite)
         samePathname = false;

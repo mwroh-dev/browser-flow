@@ -173,19 +173,26 @@ function acquireLock(lockPath) {
       if (!message.includes("EEXIST")) {
         throw error;
       }
-      // Check whether the existing lock file is stale (mtime older than threshold).
-      // If so, remove it and retry immediately — the wx flag on the next attempt
-      // guards against a concurrent acquirer that races in after our rmSync.
+      // Steal stale locks via rename, not rmSync: rename moves exactly one
+      // file, so two waiters cannot both "win", and the inode check below
+      // detects a lock that was re-created between stat and rename so a
+      // live lock is never deleted (the rmSync version had that TOCTOU).
       try {
-        const stat = statSync(lockPath);
-        if (Date.now() - stat.mtimeMs > STALE_LOCK_MS) {
-          rmSync(lockPath, { force: true });
-          continue;
+        const seen = statSync(lockPath);
+        if (Date.now() - seen.mtimeMs > STALE_LOCK_MS) {
+          const stalePath = `${lockPath}.stale-${process.pid}`;
+          renameSync(lockPath, stalePath);
+          const grabbed = statSync(stalePath);
+          if (grabbed.ino === seen.ino && Date.now() - grabbed.mtimeMs > STALE_LOCK_MS) {
+            rmSync(stalePath, { force: true });
+            continue; // stolen — retry openSync immediately
+          }
+          // A fresh lock raced in between stat and rename; restore it.
+          renameSync(stalePath, lockPath);
         }
       } catch {
-        // Lock may have been removed by another process between EEXIST and statSync.
-        // Retry the openSync on the next iteration.
-        continue;
+        // Lock vanished or another stealer won the rename — treat like a
+        // held lock and back off instead of busy-spinning.
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
     }

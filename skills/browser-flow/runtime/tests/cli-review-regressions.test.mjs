@@ -224,3 +224,113 @@ test("golden-probe classify does not flag surge when just below threshold", asyn
   const result = classify({ rows: new Array(cardinality).fill({}), cardinality, containerResolved: true }, { cardinality: 10 });
   assert.equal(result.status, "data");
 });
+
+// ── round-2 regressions: fixes-of-fixes verified by adversarial review ──
+
+test("SECRET_FIELD_PATTERN matches camelCase and joined key compounds", async () => {
+  const { SECRET_FIELD_PATTERN } = await import("../scripts/security/patterns.mjs");
+  for (const name of ["apiKey", "apikey", "x-api-key", "accessKeyId", "sshKey", "privateKey", "publickey", "appKey", "userKey", "key", "key_id"]) {
+    assert.equal(SECRET_FIELD_PATTERN.test(name), true, `expected match for: ${name}`);
+  }
+  for (const name of ["hotkey", "keyboard", "keydown", "whiskey", "jockey", "keyword", "displayName"]) {
+    assert.equal(SECRET_FIELD_PATTERN.test(name), false, `expected no match for: ${name}`);
+  }
+});
+
+test("secret pattern has a single source of truth across capture layers", async () => {
+  const { SECRET_FIELD_PATTERN } = await import("../scripts/security/patterns.mjs");
+  const { recorderInitScript } = await import("../scripts/observe/recorder-script.mjs");
+  assert.ok(recorderInitScript.includes(SECRET_FIELD_PATTERN.toString()), "recorder script must embed the shared pattern");
+  const domSanitizeSource = readFileSync(resolve(runtimeRoot, "scripts/sanitize/dom-sanitize.mjs"), "utf8");
+  assert.match(domSanitizeSource, /import \{ SECRET_FIELD_PATTERN \} from "\.\.\/security\/patterns\.mjs"/);
+  assert.doesNotMatch(domSanitizeSource, /const SECRET_FIELD_PATTERN =/);
+});
+
+test("golden-probe surge check skips tiny goldens where ratios are meaningless", async () => {
+  const { classify } = await import("../scripts/extract/golden-probe.mjs");
+  const grown = classify({ rows: [{}, {}], cardinality: 2, containerResolved: true }, { cardinality: 1 });
+  assert.equal(grown.status, "data");
+  const surged = classify({ rows: new Array(8).fill({}), cardinality: 8, containerResolved: true }, { cardinality: 3 });
+  assert.equal(surged.status, "drift");
+});
+
+test("extract paged reuse classifies per-page cardinality against the single-page golden", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/commands/extract.mjs"), "utf8");
+  assert.match(source, /perPageMax/);
+  assert.match(source, /pageCardinalities/);
+});
+
+test("assembler updates relative expectedNetwork urls for the same endpoint", async () => {
+  const { assembleComposedWorkflow } = await import("../scripts/compose/workflow-assembler.mjs");
+  const out = assembleComposedWorkflow({
+    sourceWorkflow: {
+      finalUrl: "/api/items?page=2",
+      verification: { expectedNetwork: { method: "GET", url: "/api/items?page=1" } }
+    },
+    primaryRunId: "p",
+    derivedRunId: "d",
+    selectedSteps: [{ url: "/api/items?page=2" }]
+  });
+  assert.equal(out.verification.expectedNetwork.url, "/api/items?page=2");
+  const kept = assembleComposedWorkflow({
+    sourceWorkflow: {
+      finalUrl: "/detail",
+      verification: { expectedNetwork: { method: "GET", url: "/api/list" } }
+    },
+    primaryRunId: "p",
+    derivedRunId: "d",
+    selectedSteps: [{ url: "/detail" }]
+  });
+  assert.equal(kept.verification.expectedNetwork.url, "/api/list");
+});
+
+test("validateOptions rejects --no-<flag> negation on string options", () => {
+  const metadata = {
+    name: "heal",
+    options: [{ name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" }]
+  };
+  assert.throws(() => validateOptions(/** @type {any} */ (metadata), { "run-id": false }), /requires a value/);
+});
+
+test("iteration_limit is a registered blockedReason everywhere it is consumed", () => {
+  for (const file of ["scripts/commands/compose.mjs", "scripts/compose/compose-summary.mjs", "scripts/lib/schemas.mjs"]) {
+    const source = readFileSync(resolve(runtimeRoot, file), "utf8");
+    assert.match(source, /iteration_limit/, `${file} must include iteration_limit`);
+  }
+});
+
+test("client close keeps the error sink alive until cri.close resolves", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/cdp/client.mjs"), "utf8");
+  const removeIdx = source.indexOf("criAsEmitter.removeAllListeners();");
+  const sinkIdx = source.indexOf('criAsEmitter.on("error", () => {})');
+  const closeIdx = source.indexOf("await cri.close()");
+  assert.ok(removeIdx !== -1 && sinkIdx !== -1 && closeIdx !== -1);
+  assert.ok(removeIdx < sinkIdx && sinkIdx < closeIdx, "order must be removeAll -> error sink -> close");
+});
+
+test("registry stale-lock steal is rename-based with inode verification", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/registry/workflow-registry.mjs"), "utf8");
+  assert.match(source, /renameSync\(lockPath, stalePath\)/);
+  assert.match(source, /grabbed\.ino === seen\.ino/);
+  assert.doesNotMatch(source, /rmSync\(lockPath, \{ force: true \}\);\s*\n\s*continue/);
+});
+
+test("settle pending-network check is part of the stability condition", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/observe/observer-daemon.mjs"), "utf8");
+  assert.match(source, /if \(stableMs >= STABLE_TARGET_MS\) \{\s*\n\s*if \(countPendingRequests\(networkEvents, Date\.now\(\)\) === 0\) return;/);
+  assert.match(source, /PENDING_AGE_CUTOFF_MS/);
+  assert.match(source, /await Promise\.race\(\[snapshotQueue, delay\(3_000\)\]\)/);
+});
+
+test("proxy-auth retry map drops entries on cancel and on pass-through", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/cdp/watchdogs/proxy-auth.mjs"), "utf8");
+  const deletes = source.match(/authRetryCount\.delete\(/g) ?? [];
+  assert.ok(deletes.length >= 2, "expected delete on CancelAuth and on requestPaused");
+});
+
+test("verify-run invalidates the full prior report set before spawning", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/verify/verify-run.mjs"), "utf8");
+  assert.match(source, /rmSync\(runPaths\.verificationPath, \{ force: true \}\)/);
+  assert.match(source, /verification-summary\.json"\), \{ force: true \}/);
+  assert.match(source, /rmSync\(runPaths\.securityPath, \{ force: true \}\)/);
+});

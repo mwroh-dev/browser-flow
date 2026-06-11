@@ -106,8 +106,13 @@ export async function runExtractCommand(input, deps = {}) {
     if (input.paged) {
       const readAll = deps.readAllSnapshotsHtml ?? readAllSnapshotsHtml;
       const paged = runExtractorPaged(readAll(runPaths.snapshotsManifestPath, runPaths.snapshotsDir), /** @type {{ container: string|null, fields: any[] }} */ (config));
-      const pagedResult = verdict({ rows: paged.rows, cardinality: paged.cardinality, containerResolved: paged.cardinality > 0 }, golden);
-      if (pagedResult.status === "drift" && pageKey) emitHealOnDrift(runPaths, pageKey, input.stepIndex, golden, { cardinality: paged.cardinality, containerResolved: paged.cardinality > 0 });
+      // The golden cardinality is a single-page observation, so classify on
+      // the fullest single page — comparing the cross-page total against a
+      // one-page golden would flag every healthy multi-page extraction as a
+      // surge drift.
+      const perPageMax = paged.pageCardinalities.length > 0 ? Math.max(...paged.pageCardinalities) : 0;
+      const pagedResult = verdict({ rows: paged.rows, cardinality: perPageMax, containerResolved: paged.cardinality > 0 }, golden);
+      if (pagedResult.status === "drift" && pageKey) emitHealOnDrift(runPaths, pageKey, input.stepIndex, golden, { cardinality: perPageMax, containerResolved: paged.cardinality > 0 });
       const pagedOut = /** @type {Record<string, any>} */ ({ runId: input.runId, stepIndex: input.stepIndex, pageKey, status: pagedResult.status, rows: paged.rows, cardinality: paged.cardinality, pages: paged.pages, reused: true });
       updatePublicReadRegistryData(runPaths, input, workflow, writeDataResult(runPaths, input, pagedOut));
       writeJson(runPaths.extractResultPath, pagedOut);

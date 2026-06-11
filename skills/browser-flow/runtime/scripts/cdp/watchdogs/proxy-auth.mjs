@@ -50,6 +50,7 @@ export async function installProxyAuthWatchdog(session, credentials) {
     const retries = (authRetryCount.get(requestId) ?? 0) + 1;
     authRetryCount.set(requestId, retries);
     if (retries > MAX_AUTH_RETRIES) {
+      authRetryCount.delete(requestId);
       client.send("Fetch.continueWithAuth", {
         requestId: p.requestId,
         authChallengeResponse: { response: "CancelAuth" }
@@ -66,10 +67,13 @@ export async function installProxyAuthWatchdog(session, credentials) {
     }, sid).catch(() => {});
   }));
 
-  // Pass through all other paused requests.
+  // Pass through all other paused requests. A pause after a challenge means
+  // auth succeeded for that request — drop its retry entry so the map only
+  // holds in-flight challenge loops.
   off.push(client.on("Fetch.requestPaused", (params, sessionIdArg) => {
     const p = /** @type {any} */ (params);
     const sid = sessionIdArg ?? p.sessionId;
+    authRetryCount.delete(String(p.requestId));
     client.send("Fetch.continueRequest", { requestId: p.requestId }, sid).catch(() => {});
   }));
 

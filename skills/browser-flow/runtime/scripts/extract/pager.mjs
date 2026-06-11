@@ -13,18 +13,21 @@ import { runExtractor } from "./extractor.mjs";
 /**
  * @param {string[]} htmls
  * @param {{ container: string|null, fields: any[] }} config
- * @returns {{ rows: Record<string, unknown>[], cardinality: number, pages: number }}
+ * @returns {{ rows: Record<string, unknown>[], cardinality: number, pages: number, pageCardinalities: number[] }}
  */
 export function runExtractorPaged(htmls, config) {
   /** @type {Record<string, unknown>[]} */
   const rows = [];
+  /** @type {number[]} */
+  const pageCardinalities = [];
   let pages = 0;
   for (const html of Array.isArray(htmls) ? htmls : []) {
     const r = runExtractor(html, config);
     for (const row of r.rows) rows.push(row);
+    pageCardinalities.push(r.rows.length);
     pages += 1;
   }
-  return { rows, cardinality: rows.length, pages };
+  return { rows, cardinality: rows.length, pages, pageCardinalities };
 }
 
 /**

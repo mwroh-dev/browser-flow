@@ -283,6 +283,12 @@ async function main() {
         return;
       }
       await settleCapture(rawEvents, networkEvents);
+      // Stop snapshot producers, then flush queued snapshot work so the
+      // manifest below includes every snapshot and none of the queued tasks
+      // runs against the disposed session.
+      for (const unsub of frameNavigatedUnsubs) unsub();
+      frameNavigatedUnsubs.length = 0;
+      await Promise.race([snapshotQueue, delay(3_000)]);
       const currentTargets = await enrichCaptureTargetsWithLiveUrls(
         session.sessionManager.listPageTargets(),
         dom
@@ -367,7 +373,6 @@ async function main() {
         ...(captureScreenshot ? { captureScreenshot } : {})
       }));
 
-      for (const unsub of frameNavigatedUnsubs) unsub();
       await session.dispose();
       if (fixtureServer) {
         await fixtureServer.close();
@@ -677,41 +682,54 @@ function lastNavigateUrlFromEvents(events) {
 }
 
 /**
- * Returns the count of requestIds that have been sent but not yet completed
- * (no responseReceived or loadingFinished event).
+ * Returns the count of recently-sent requestIds that have not completed
+ * (no responseReceived or loadingFinished event). Requests older than the
+ * age cutoff are treated as abandoned: the network watchdog does not record
+ * Network.loadingFailed, so a failed/canceled request would otherwise stay
+ * "pending" for the whole session and pin the settle wait at its cap.
  * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} networkEvents
+ * @param {number} now
  */
-function countPendingRequests(networkEvents) {
-  /** @type {Set<string>} */
-  const sent = new Set();
+function countPendingRequests(networkEvents, now) {
+  const PENDING_AGE_CUTOFF_MS = 10_000;
+  /** @type {Map<string, number>} */
+  const sentAt = new Map();
   /** @type {Set<string>} */
   const completed = new Set();
   for (const ev of networkEvents) {
     const e = /** @type {any} */ (ev);
-    if (e.type === "network.request" && typeof e.requestId === "string") {
-      sent.add(e.requestId);
-    } else if (
-      (e.type === "network.response" || e.type === "network.loadingFinished") &&
-      typeof e.requestId === "string"
-    ) {
+    if (typeof e.requestId !== "string") continue;
+    if (e.type === "network.request") {
+      sentAt.set(e.requestId, typeof e.timestamp === "number" ? e.timestamp : now);
+    } else if (e.type === "network.response" || e.type === "network.loadingFinished") {
       completed.add(e.requestId);
     }
   }
   let pending = 0;
-  for (const id of sent) {
-    if (!completed.has(id)) pending += 1;
+  for (const [id, ts] of sentAt) {
+    if (!completed.has(id) && now - ts <= PENDING_AGE_CUTOFF_MS) pending += 1;
   }
   return pending;
 }
 
 /**
+ * Settle = event signature unchanged for 150ms AND no in-flight network
+ * request. The pending check is part of the stability condition (not a
+ * follow-up phase) so a response still in flight while events are quiet —
+ * the case this exists for — actually delays the settle.
  * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} rawEvents
  * @param {import("../sanitize/event-sanitizer.mjs").RawEvent[]} networkEvents
  */
 async function settleCapture(rawEvents, networkEvents) {
+  const TICK_MS = 50;
+  const STABLE_TARGET_MS = 150;
+  const UNSTABLE_BUDGET_MS = 1_000; // page never goes quiet — original cap
+  const PENDING_BUDGET_MS = 5_000; // quiet page, response still in flight
   let lastSignature = "";
   let stableMs = 0;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  let unstableWaitedMs = 0;
+  let pendingWaitedMs = 0;
+  for (;;) {
     const signature = JSON.stringify({
       rawCount: rawEvents.length,
       networkCount: networkEvents.length,
@@ -720,27 +738,22 @@ async function settleCapture(rawEvents, networkEvents) {
     });
 
     if (signature === lastSignature) {
-      stableMs += 50;
-      if (stableMs >= 150) {
-        return;
-      }
+      stableMs += TICK_MS;
     } else {
       lastSignature = signature;
       stableMs = 0;
     }
 
-    await delay(50);
-  }
+    if (stableMs >= STABLE_TARGET_MS) {
+      if (countPendingRequests(networkEvents, Date.now()) === 0) return;
+      pendingWaitedMs += TICK_MS;
+      if (pendingWaitedMs >= PENDING_BUDGET_MS) return;
+    } else {
+      unstableWaitedMs += TICK_MS;
+      if (unstableWaitedMs >= UNSTABLE_BUDGET_MS) return;
+    }
 
-  // After the stability loop, extend settle if there are pending network requests.
-  // Cap extension at 5 seconds to avoid infinite wait.
-  const PENDING_POLL_INTERVAL_MS = 100;
-  const PENDING_MAX_WAIT_MS = 5_000;
-  let pendingWaitMs = 0;
-  while (pendingWaitMs < PENDING_MAX_WAIT_MS) {
-    if (countPendingRequests(networkEvents) === 0) break;
-    await delay(PENDING_POLL_INTERVAL_MS);
-    pendingWaitMs += PENDING_POLL_INTERVAL_MS;
+    await delay(TICK_MS);
   }
 }
 

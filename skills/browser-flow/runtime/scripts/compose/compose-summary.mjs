@@ -1,6 +1,6 @@
 import { SCHEMA_VERSIONS } from "../lib/schema-versions.mjs";
 
-const ALLOWED_BLOCKED_REASONS = new Set(["none", "unreachable_goal", "policy_blocked", "graph_disconnect"]);
+const ALLOWED_BLOCKED_REASONS = new Set(["none", "unreachable_goal", "policy_blocked", "graph_disconnect", "iteration_limit"]);
 
 export function normalizeComposeBlockedReason(reason) {
   return ALLOWED_BLOCKED_REASONS.has(reason) ? reason : "unreachable_goal";
