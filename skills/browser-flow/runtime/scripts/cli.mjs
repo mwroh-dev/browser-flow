@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -78,6 +78,18 @@ async function runCli() {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await runCli();
+if (process.argv[1]) {
+  try {
+    const thisFile = realpathSync(fileURLToPath(import.meta.url));
+    const calledAs = realpathSync(resolve(process.argv[1]));
+    if (thisFile === calledAs) {
+      await runCli();
+    }
+  } catch {
+    // realpathSync may fail if the path does not exist (e.g. a broken symlink);
+    // fall back to the plain resolved comparison so the CLI still runs.
+    if (resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+      await runCli();
+    }
+  }
 }

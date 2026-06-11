@@ -188,13 +188,7 @@ function waitForDaemonReady(controlPath) {
   const startedAt = Date.now();
   const timeoutMs = 30_000;
 
-  return waitLoop();
-
-  function waitLoop() {
-    if (Date.now() - startedAt > timeoutMs) {
-      throw new Error("Timed out waiting for observer daemon to become ready.");
-    }
-
+  while (Date.now() - startedAt <= timeoutMs) {
     /** @type {{ status?: string, error?: string } | undefined} */
     let control;
     try {
@@ -211,6 +205,7 @@ function waitForDaemonReady(controlPath) {
     }
 
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    return waitLoop();
   }
+
+  throw new Error("Timed out waiting for observer daemon to become ready.");
 }

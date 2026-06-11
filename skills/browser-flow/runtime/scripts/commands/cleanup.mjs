@@ -86,7 +86,13 @@ function spawnCleanupRunner(runnerPath, headless, cleanupNamesJson) {
       stdio: ["ignore", "ignore", "inherit"]
     });
     child.on("error", reject);
-    child.on("exit", () => resolve(undefined));
+    child.on("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`cleanup runner exited with code ${code}`));
+      } else {
+        resolve(undefined);
+      }
+    });
   });
 }
 

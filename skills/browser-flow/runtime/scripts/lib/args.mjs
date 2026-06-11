@@ -15,6 +15,10 @@ export function parseCommandLine(argv) {
       continue;
     }
     const key = token.slice(2);
+    if (key.startsWith("no-")) {
+      options[key.slice(3)] = false;
+      continue;
+    }
     const next = argv[index + 1];
     if (!next || next.startsWith("--")) {
       options[key] = true;

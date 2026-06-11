@@ -1,4 +1,4 @@
-import { closeSync, existsSync, openSync, renameSync, rmSync } from "node:fs";
+import { closeSync, existsSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { getPaths } from "../lib/config.mjs";
 import { readJson, writeJson } from "../lib/fs.mjs";
@@ -158,6 +158,9 @@ function validateExternalDataResult(entry) {
   }
 }
 
+/** Stale lock threshold in milliseconds. A lock file older than this is assumed orphaned. */
+const STALE_LOCK_MS = 30_000;
+
 /**
  * @param {string} lockPath
  */
@@ -169,6 +172,20 @@ function acquireLock(lockPath) {
       const message = error instanceof Error ? error.message : String(error);
       if (!message.includes("EEXIST")) {
         throw error;
+      }
+      // Check whether the existing lock file is stale (mtime older than threshold).
+      // If so, remove it and retry immediately — the wx flag on the next attempt
+      // guards against a concurrent acquirer that races in after our rmSync.
+      try {
+        const stat = statSync(lockPath);
+        if (Date.now() - stat.mtimeMs > STALE_LOCK_MS) {
+          rmSync(lockPath, { force: true });
+          continue;
+        }
+      } catch {
+        // Lock may have been removed by another process between EEXIST and statSync.
+        // Retry the openSync on the next iteration.
+        continue;
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
     }

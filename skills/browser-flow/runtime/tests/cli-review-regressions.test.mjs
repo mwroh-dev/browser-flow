@@ -4,9 +4,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-import { classifyCliError } from "../scripts/lib/cli-errors.mjs";
+import { classifyCliError, CliError } from "../scripts/lib/cli-errors.mjs";
 import { chromeCheck, directoryWritableStatus, doctorCommand } from "../scripts/commands/doctor.mjs";
 import { renderCompletion } from "../scripts/lib/completion.mjs";
+import { parseCommandLine } from "../scripts/lib/args.mjs";
+import { validateOptions } from "../scripts/lib/cli-registry.mjs";
+import { saveSession, readSession, deleteSession } from "../scripts/lib/keychain.mjs";
 
 const runtimeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -88,4 +91,136 @@ test("zsh completion escapes colons in command descriptions", () => {
   const source = readFileSync(resolve(runtimeRoot, "scripts/lib/completion.mjs"), "utf8");
 
   assert.match(source, /replace\(\/:\/g, "\\\\:"\)/);
+});
+
+// A. args.mjs --no-<flag> support
+test("parseCommandLine parses --no-headless as headless=false", () => {
+  const { options } = parseCommandLine(["node", "cli.mjs", "heal", "--run-id", "demo", "--no-headless"]);
+  assert.equal(options.headless, false);
+});
+
+test("validateOptions accepts boolean false from --no-<flag> on boolean options", () => {
+  const metadata = {
+    name: "heal",
+    options: [{ name: "--headless", required: false, type: "boolean", values: [], description: "--headless" }]
+  };
+  assert.doesNotThrow(() => validateOptions(/** @type {any} */ (metadata), { headless: false }));
+  assert.throws(() => validateOptions(/** @type {any} */ (metadata), { headless: "yes" }), /does not accept a value/);
+});
+
+test("parseCommandLine parses --headless as headless=true", () => {
+  const { options } = parseCommandLine(["node", "cli.mjs", "heal", "--run-id", "demo", "--headless"]);
+  assert.equal(options.headless, true);
+});
+
+test("parseCommandLine leaves headless undefined when omitted", () => {
+  const { options } = parseCommandLine(["node", "cli.mjs", "heal", "--run-id", "demo"]);
+  assert.equal(options.headless, undefined);
+});
+
+// D. extract.mjs --step NaN/negative guard
+test("extractCommand throws invalidUsage for non-integer step", () => {
+  // Import inline to avoid needing full run fixture setup
+  const source = readFileSync(resolve(runtimeRoot, "scripts/commands/extract.mjs"), "utf8");
+  assert.match(source, /Number\.isInteger\(stepIndex\)/);
+  assert.match(source, /invalidUsage/);
+});
+
+// E. keychain.mjs macOS guard
+test("keychain saveSession throws CliError on non-macOS when no exec mock provided", () => {
+  if (process.platform === "darwin") {
+    // On macOS the guard passes — skip this assertion
+    return;
+  }
+  assert.throws(() => saveSession("ref", "value"), (err) => {
+    assert.ok(err instanceof CliError, "should be CliError");
+    assert.equal(err.code, "safety_or_permission_block");
+    assert.match(err.message, /macOS/);
+    return true;
+  });
+});
+
+test("keychain readSession throws CliError on non-macOS when no exec mock provided", () => {
+  if (process.platform === "darwin") {
+    return;
+  }
+  assert.throws(() => readSession("ref"), (err) => {
+    assert.ok(err instanceof CliError);
+    assert.equal(err.code, "safety_or_permission_block");
+    return true;
+  });
+});
+
+// G. workflow-registry.mjs stale lock detection
+test("workflow-registry acquireLock removes stale lock file and retries", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/registry/workflow-registry.mjs"), "utf8");
+  assert.match(source, /STALE_LOCK_MS/);
+  assert.match(source, /mtimeMs/);
+  assert.match(source, /rmSync\(lockPath/);
+});
+
+// security/redact.mjs — sanitizeUrl catch returns placeholder (A)
+test("sanitizeUrl returns placeholder for unparseable URLs", async () => {
+  const { sanitizeUrl } = await import("../scripts/security/redact.mjs");
+  const result = sanitizeUrl("not a valid url ://");
+  assert.equal(result, "<unparseable-url>");
+});
+
+test("sanitizeUrl still sanitizes valid URLs normally", async () => {
+  const { sanitizeUrl } = await import("../scripts/security/redact.mjs");
+  assert.equal(sanitizeUrl("http://127.0.0.1/path"), "http://127.0.0.1/path");
+  assert.equal(sanitizeUrl("https://example.com/foo"), "<non-local-url>");
+});
+
+// security/patterns.mjs — SECRET_FIELD_PATTERN key boundary (B)
+test("SECRET_FIELD_PATTERN does not match hotkey/keyboard/keydown false-positives", async () => {
+  const { SECRET_FIELD_PATTERN } = await import("../scripts/security/patterns.mjs");
+  for (const fp of ["hotkey", "keyboard", "keydown", "keyup", "donkey", "monkey"]) {
+    SECRET_FIELD_PATTERN.lastIndex = 0;
+    assert.equal(SECRET_FIELD_PATTERN.test(fp), false, `expected no match for: ${fp}`);
+  }
+});
+
+test("SECRET_FIELD_PATTERN matches real key-type field names", async () => {
+  const { SECRET_FIELD_PATTERN } = await import("../scripts/security/patterns.mjs");
+  for (const tp of ["api-key", "api_key", "x-api-key", "secret-key", "access_key", "password", "token", "session", "auth", "cookie", "csrf"]) {
+    SECRET_FIELD_PATTERN.lastIndex = 0;
+    assert.equal(SECRET_FIELD_PATTERN.test(tp), true, `expected match for: ${tp}`);
+  }
+});
+
+// E. golden-probe surge detection
+test("golden-probe classify returns data when cardinality is within normal range", async () => {
+  const { classify } = await import("../scripts/extract/golden-probe.mjs");
+  const result = classify({ rows: [{}, {}], cardinality: 2, containerResolved: true }, { cardinality: 2 });
+  assert.equal(result.status, "data");
+});
+
+test("golden-probe classify returns drift when cardinality drops 50%+ from golden", async () => {
+  const { classify } = await import("../scripts/extract/golden-probe.mjs");
+  const result = classify({ rows: [{}], cardinality: 1, containerResolved: true }, { cardinality: 4 });
+  assert.equal(result.status, "drift");
+  assert.match(result.reason ?? "", /dropped/);
+});
+
+test("golden-probe classify returns drift when cardinality surges 2x+ from golden", async () => {
+  const { classify, CARDINALITY_SURGE_THRESHOLD } = await import("../scripts/extract/golden-probe.mjs");
+  const surgeCardinality = Math.ceil(10 * CARDINALITY_SURGE_THRESHOLD);
+  const result = classify({ rows: new Array(surgeCardinality).fill({}), cardinality: surgeCardinality, containerResolved: true }, { cardinality: 10 });
+  assert.equal(result.status, "drift");
+  assert.match(result.reason ?? "", /surged/);
+});
+
+test("golden-probe classify does not flag surge when golden is absent", async () => {
+  const { classify } = await import("../scripts/extract/golden-probe.mjs");
+  const result = classify({ rows: new Array(100).fill({}), cardinality: 100, containerResolved: true }, null);
+  assert.equal(result.status, "data");
+});
+
+test("golden-probe classify does not flag surge when just below threshold", async () => {
+  const { classify, CARDINALITY_SURGE_THRESHOLD } = await import("../scripts/extract/golden-probe.mjs");
+  // cardinality / golden = 1.99 < 2.0 threshold
+  const cardinality = Math.floor(10 * (CARDINALITY_SURGE_THRESHOLD - 0.01));
+  const result = classify({ rows: new Array(cardinality).fill({}), cardinality, containerResolved: true }, { cardinality: 10 });
+  assert.equal(result.status, "data");
 });

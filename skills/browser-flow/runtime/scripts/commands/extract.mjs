@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { getStringOption, getBooleanOption } from "../lib/args.mjs";
+import { invalidUsage } from "../lib/cli-errors.mjs";
 import { getRunPaths } from "../lib/config.mjs";
 import { readJson, writeJson } from "../lib/fs.mjs";
 import { parseScrapeResult } from "../lib/schemas.mjs";
@@ -194,6 +195,9 @@ export function extractCommand(options) {
   const schemaPath = getStringOption(options, "schema", undefined);
   const stepRaw = getStringOption(options, "step", undefined);
   const stepIndex = stepRaw === undefined ? undefined : Number(stepRaw);
+  if (stepRaw !== undefined && (!Number.isInteger(stepIndex) || /** @type {number} */ (stepIndex) < 0)) {
+    throw invalidUsage(`bf extract --step must be a non-negative integer, got "${stepRaw}".`);
+  }
   const reuse = getBooleanOption(options, "reuse");
   const paged = getBooleanOption(options, "paged");
   const dataModeRaw = getStringOption(options, "data-mode", undefined);

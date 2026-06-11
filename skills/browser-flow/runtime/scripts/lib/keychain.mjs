@@ -1,8 +1,22 @@
 import { execFileSync } from "node:child_process";
+import { CliError } from "./cli-errors.mjs";
 
 const ACCOUNT = "browser-flow";
 
 /** @typedef {(file: string, args: string[]) => string} ExecFn */
+
+/**
+ * Assert that the current platform is macOS. Throws a CliError if not.
+ * @returns {void}
+ */
+function assertMacos() {
+  if (process.platform !== "darwin") {
+    throw new CliError(
+      "safety_or_permission_block",
+      `keychain operations require macOS (darwin); current platform is "${process.platform}".`
+    );
+  }
+}
 
 /** @param {{ exec?: ExecFn }} [opts] */
 function resolveExec(opts) {
@@ -17,6 +31,7 @@ function resolveExec(opts) {
  * @param {{ exec?: ExecFn }} [opts]
  */
 export function saveSession(ref, value, opts) {
+  assertMacos();
   const exec = resolveExec(opts);
   const encoded = Buffer.from(value, "utf8").toString("base64");
   exec("security", ["add-generic-password", "-a", ACCOUNT, "-s", ref, "-w", encoded, "-U"]);
@@ -29,6 +44,7 @@ export function saveSession(ref, value, opts) {
  * @returns {string | null}
  */
 export function readSession(ref, opts) {
+  assertMacos();
   const exec = resolveExec(opts);
   /** @type {string} */
   let out;
@@ -46,6 +62,7 @@ export function readSession(ref, opts) {
  * @param {{ exec?: ExecFn }} [opts]
  */
 export function deleteSession(ref, opts) {
+  assertMacos();
   const exec = resolveExec(opts);
   try {
     exec("security", ["delete-generic-password", "-a", ACCOUNT, "-s", ref]);
