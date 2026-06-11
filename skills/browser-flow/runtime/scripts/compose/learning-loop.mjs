@@ -13,12 +13,18 @@ export async function runLearningLoop({
   choose,
   execute,
   reconnect,
-  appendJournal
+  appendJournal,
+  maxIterations = 50
 }) {
   const learnedSteps = [];
   let observation = await observe({ requestIntent, learnedSteps });
+  let iterations = 0;
 
   while (true) {
+    if (iterations >= maxIterations) {
+      return { status: "blocked", blockedReason: "iteration_limit", learnedSteps };
+    }
+    iterations += 1;
     const action = await choose({ requestIntent, observation, learnedSteps });
     if (!action) {
       const blockedReason = learnedSteps.length > 0 ? "graph_disconnect" : "unreachable_goal";

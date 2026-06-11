@@ -349,9 +349,14 @@ function normalizeObservedUrl(rawUrl) {
   if (!rawUrl) {
     return "";
   }
-  const url = new URL(rawUrl);
-  if (workflow.fixture === "synthetic" || workflow.fixture === "docs" || workflow.fixture === "stateful" || workflow.fixture === "submit" || workflow.fixture === "secret" || workflow.fixture === "selfclean" || workflow.fixture === "noanchor" || workflow.fixture === "signals" || workflow.fixture === "samename" || workflow.fixture === "urlstate") {
-    return \`\${url.pathname}\${url.search}\`;
+  try {
+    const url = new URL(rawUrl);
+    if (workflow.fixture === "synthetic" || workflow.fixture === "docs" || workflow.fixture === "stateful" || workflow.fixture === "submit" || workflow.fixture === "secret" || workflow.fixture === "selfclean" || workflow.fixture === "noanchor" || workflow.fixture === "signals" || workflow.fixture === "samename" || workflow.fixture === "urlstate") {
+      return \`\${url.pathname}\${url.search}\`;
+    }
+  } catch (_) {
+    // rawUrl is not a valid absolute URL — return it as-is to avoid crashing the runner.
+    return rawUrl;
   }
   return rawUrl;
 }
@@ -2498,7 +2503,13 @@ export async function runWorkflow(options = {}) {
               }
               await action.clickByBackendNodeId(targetId, submitterBackendNodeId);
             } else {
-              await evaluateOnNode(bs, targetId, formBackendNodeId, \`function() { this.requestSubmit(); }\`);
+              await evaluateOnNode(bs, targetId, formBackendNodeId, \`function() {
+                try {
+                  this.requestSubmit();
+                } catch (e) {
+                  throw new Error("requestSubmit failed on form (selector: " + (this.id || this.name || "<unnamed>") + "): " + (e && e.message ? e.message : String(e)));
+                }
+              }\`);
             }
           }
 

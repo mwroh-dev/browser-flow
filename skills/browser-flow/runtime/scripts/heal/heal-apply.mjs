@@ -16,9 +16,13 @@ export function applyHeal(workflow, healResult) {
   /** @type {string[]} */ const unmatched = [];
   for (const entry of (healResult.healedLocators || [])) {
     const key = entry.match.structuralKey;
-    const step = next.steps.find((s) => s && s.locator && s.locator.structuralKey === key);
-    if (step) { step.locator = entry.locator; applied.push(key); }
-    else { unmatched.push(key); }
+    const matched = next.steps.filter((s) => s && s.locator && s.locator.structuralKey === key);
+    if (matched.length > 0) {
+      for (const step of matched) { step.locator = entry.locator; }
+      applied.push(key);
+    } else {
+      unmatched.push(key);
+    }
   }
   return { workflow: next, applied, unmatched, status: "healed" };
 }
