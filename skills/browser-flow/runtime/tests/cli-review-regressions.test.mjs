@@ -159,11 +159,17 @@ test("workflow-registry acquireLock removes stale lock file and retries", () => 
   assert.match(source, /rmSync\(lockPath/);
 });
 
-// security/redact.mjs — sanitizeUrl catch returns placeholder (A)
-test("sanitizeUrl returns placeholder for unparseable URLs", async () => {
+// security/redact.mjs — sanitizeUrl never leaks raw input and never erases
+// recoverable shape: relative URLs pass through redacted, schemeless strings
+// fall back to base-parsed redaction, and only base-unparseable input
+// collapses to the placeholder.
+test("sanitizeUrl redacts schemeless URLs instead of leaking or erasing them", async () => {
   const { sanitizeUrl } = await import("../scripts/security/redact.mjs");
-  const result = sanitizeUrl("not a valid url ://");
-  assert.equal(result, "<unparseable-url>");
+  assert.equal(sanitizeUrl("/api/items?page=1"), "/api/items?page=1");
+  const schemeless = sanitizeUrl("example.com/page?token=secret123");
+  assert.ok(!schemeless.includes("secret123"), "secret value must not leak");
+  assert.ok(schemeless.includes("/example.com/page"), "shape must be preserved");
+  assert.equal(sanitizeUrl("http://[bad"), "<unparseable-url>");
 });
 
 test("sanitizeUrl still sanitizes valid URLs normally", async () => {
@@ -333,4 +339,28 @@ test("verify-run invalidates the full prior report set before spawning", () => {
   assert.match(source, /rmSync\(runPaths\.verificationPath, \{ force: true \}\)/);
   assert.match(source, /verification-summary\.json"\), \{ force: true \}/);
   assert.match(source, /rmSync\(runPaths\.securityPath, \{ force: true \}\)/);
+});
+
+// ── Gemini review sweep: aggregation wrappers must propagate source fields ──
+
+test("runExtractorPaged propagates containerResolved from the per-page extractor", async () => {
+  const { runExtractorPaged } = await import("../scripts/extract/pager.mjs");
+  const config = { container: "li.item", fields: [{ name: "t", selector: "span" }] };
+  const emptyResolved = runExtractorPaged(["<ul><li class='other'></li></ul>", "<ul></ul>"], config);
+  assert.equal(emptyResolved.cardinality, 0);
+  assert.equal(emptyResolved.containerResolved, false);
+  const resolvedNoRows = runExtractorPaged(["<ul><li class='item'></li></ul>"], { container: "li.item", fields: [{ name: "t", selector: ".missing" }] });
+  assert.equal(resolvedNoRows.containerResolved, true);
+});
+
+test("paged classify treats empty-but-resolved pages as confident-zero, not drift", async () => {
+  const { classify } = await import("../scripts/extract/golden-probe.mjs");
+  const result = classify({ rows: [], cardinality: 0, containerResolved: true }, { cardinality: 5 });
+  assert.equal(result.status, "confident-zero");
+});
+
+test("extract paged path consumes the propagated containerResolved, not a row-count proxy", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/commands/extract.mjs"), "utf8");
+  assert.match(source, /containerResolved: paged\.containerResolved/);
+  assert.doesNotMatch(source, /containerResolved: paged\.cardinality > 0/);
 });

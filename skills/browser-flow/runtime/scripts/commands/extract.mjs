@@ -111,9 +111,9 @@ export async function runExtractCommand(input, deps = {}) {
       // one-page golden would flag every healthy multi-page extraction as a
       // surge drift.
       const perPageMax = paged.pageCardinalities.length > 0 ? Math.max(...paged.pageCardinalities) : 0;
-      const pagedResult = verdict({ rows: paged.rows, cardinality: perPageMax, containerResolved: paged.cardinality > 0 }, golden);
-      if (pagedResult.status === "drift" && pageKey) emitHealOnDrift(runPaths, pageKey, input.stepIndex, golden, { cardinality: perPageMax, containerResolved: paged.cardinality > 0 });
-      const pagedOut = /** @type {Record<string, any>} */ ({ runId: input.runId, stepIndex: input.stepIndex, pageKey, status: pagedResult.status, rows: paged.rows, cardinality: paged.cardinality, pages: paged.pages, reused: true });
+      const pagedResult = verdict({ rows: paged.rows, cardinality: perPageMax, containerResolved: paged.containerResolved }, golden);
+      if (pagedResult.status === "drift" && pageKey) emitHealOnDrift(runPaths, pageKey, input.stepIndex, golden, { cardinality: perPageMax, containerResolved: paged.containerResolved });
+      const pagedOut = /** @type {Record<string, any>} */ ({ runId: input.runId, stepIndex: input.stepIndex, pageKey, status: pagedResult.status, rows: paged.rows, cardinality: paged.cardinality, pages: paged.pages, containerResolved: paged.containerResolved, reused: true });
       updatePublicReadRegistryData(runPaths, input, workflow, writeDataResult(runPaths, input, pagedOut));
       writeJson(runPaths.extractResultPath, pagedOut);
       return pagedOut;
@@ -125,7 +125,7 @@ export async function runExtractCommand(input, deps = {}) {
     const extraction = extract(html, config);
     const result = verdict(extraction, golden);
     if (result.status === "drift" && pageKey) emitHealOnDrift(runPaths, pageKey, input.stepIndex, golden, extraction);
-    const out = /** @type {Record<string, any>} */ ({ runId: input.runId, stepIndex: input.stepIndex, pageKey, status: result.status, rows: result.rows, cardinality: extraction.cardinality, reason: result.reason, reused: true });
+    const out = /** @type {Record<string, any>} */ ({ runId: input.runId, stepIndex: input.stepIndex, pageKey, status: result.status, rows: result.rows, cardinality: extraction.cardinality, containerResolved: extraction.containerResolved, reason: result.reason, reused: true });
     updatePublicReadRegistryData(runPaths, input, workflow, writeDataResult(runPaths, input, out));
     writeJson(runPaths.extractResultPath, out);
     return out;

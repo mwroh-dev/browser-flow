@@ -13,7 +13,7 @@ import { runExtractor } from "./extractor.mjs";
 /**
  * @param {string[]} htmls
  * @param {{ container: string|null, fields: any[] }} config
- * @returns {{ rows: Record<string, unknown>[], cardinality: number, pages: number, pageCardinalities: number[] }}
+ * @returns {{ rows: Record<string, unknown>[], cardinality: number, pages: number, pageCardinalities: number[], containerResolved: boolean }}
  */
 export function runExtractorPaged(htmls, config) {
   /** @type {Record<string, unknown>[]} */
@@ -21,13 +21,18 @@ export function runExtractorPaged(htmls, config) {
   /** @type {number[]} */
   const pageCardinalities = [];
   let pages = 0;
+  // Propagate the extractor's own structure signal instead of letting the
+  // caller approximate it from row counts — an empty-but-resolved page must
+  // classify as confident-zero, not structure-absent drift.
+  let containerResolved = false;
   for (const html of Array.isArray(htmls) ? htmls : []) {
     const r = runExtractor(html, config);
     for (const row of r.rows) rows.push(row);
     pageCardinalities.push(r.rows.length);
+    if (r.containerResolved) containerResolved = true;
     pages += 1;
   }
-  return { rows, cardinality: rows.length, pages, pageCardinalities };
+  return { rows, cardinality: rows.length, pages, pageCardinalities, containerResolved };
 }
 
 /**
