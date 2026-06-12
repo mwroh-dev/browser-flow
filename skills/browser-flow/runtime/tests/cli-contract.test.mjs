@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { COMMANDS, buildCapabilities, buildCommandSchema, buildSchema, SUPPORT_SCOPE } from "../scripts/lib/cli-metadata.mjs";
 import { COMMAND_REGISTRY } from "../scripts/lib/cli-registry.mjs";
-import { invalidUsage, missingRequiredOption, classifyCliError, formatJsonCliError } from "../scripts/lib/cli-errors.mjs";
+import { invalidUsage, missingRequiredOption, classifyCliError, formatHumanCliError, formatJsonCliError } from "../scripts/lib/cli-errors.mjs";
 
 const runtimeRoot = resolve(import.meta.dirname, "..");
 const cliEnvRoot = mkdtempSync(resolve(tmpdir(), "bf-cli-env-"));
@@ -128,6 +128,44 @@ test("typed cli errors bypass regex classification", () => {
   assert.equal(untyped.code, "runtime_error");
   assert.equal(untyped.exitCode, 1);
   assert.deepEqual(untyped.suggestedCommands, ["browser-flow help"]);
+});
+
+test("typed cli errors expose stable json and human contract fields", () => {
+  const typed = invalidUsage("bad flag", ["browser-flow help"], {
+    subtype: "unknown_flag",
+    param: "--bad",
+    hint: "remove --bad or run browser-flow help",
+    artifacts: ["none"],
+    retryable: false
+  });
+  const failure = classifyCliError(typed);
+  const payload = formatJsonCliError(failure);
+
+  assert.equal(payload.error.code, "invalid_usage");
+  assert.equal(payload.error.type, "validation");
+  assert.equal(payload.error.subtype, "unknown_flag");
+  assert.equal(payload.error.param, "--bad");
+  assert.equal(payload.error.hint, "remove --bad or run browser-flow help");
+  assert.deepEqual(payload.error.artifacts, ["none"]);
+  assert.equal(payload.error.retryable, false);
+  assert.deepEqual(payload.error.suggestedCommands, ["browser-flow help"]);
+
+  const human = formatHumanCliError(failure);
+  assert.match(human, /Type: validation/);
+  assert.match(human, /Subtype: unknown_flag/);
+  assert.match(human, /Hint: remove --bad or run browser-flow help/);
+});
+
+test("typed cli errors omit absent optional json fields", () => {
+  const payload = formatJsonCliError(classifyCliError(invalidUsage("plain invalid message", ["browser-flow help"])));
+
+  assert.equal(payload.error.code, "invalid_usage");
+  assert.equal(payload.error.type, "validation");
+  assert.equal("subtype" in payload.error, false);
+  assert.equal("hint" in payload.error, false);
+  assert.equal("param" in payload.error, false);
+  assert.equal("artifacts" in payload.error, false);
+  assert.equal("retryable" in payload.error, false);
 });
 
 test("release cli smoke works without importing heavy command modules first", () => {
