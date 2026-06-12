@@ -179,6 +179,33 @@ export const COMMANDS = [
     safetyImplications: ["Completion is static and does not inspect browser state or artifacts."]
   }),
   command({
+    name: "status",
+    group: "setup",
+    risk: "read",
+    layer: "setup",
+    classification: "public",
+    description: "Report whether a run can truthfully claim success from authoritative artifacts.",
+    usage: "browser-flow status --run-id <id>",
+    options: [
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
+    examples: ["browser-flow status --run-id demo"],
+    sideEffects: ["Read-only; reads run artifacts and writes JSON status to stdout."],
+    artifacts: ["Reads workflow.json, reports/verification.json, reports/security.json, reports/verification-summary.json, and reports/data-result.json when present."],
+    related: ["verify", "promote", "schema", "capabilities"],
+    output: "json",
+    readArtifacts: [
+      "artifacts/runs/<id>/analysis/workflow.json",
+      "artifacts/runs/<id>/reports/verification.json",
+      "artifacts/runs/<id>/reports/security.json",
+      "artifacts/runs/<id>/reports/verification-summary.json",
+      "artifacts/runs/<id>/reports/data-result.json"
+    ],
+    writtenArtifacts: ["None."],
+    mutating: false,
+    safetyImplications: ["Success is claimable only from parsed verification/security artifacts with passed replay, complete path, full step execution, and security ok:true."]
+  }),
+  command({
     name: "prepare",
     group: "capture",
     risk: "write",

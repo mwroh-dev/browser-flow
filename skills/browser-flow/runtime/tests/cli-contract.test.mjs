@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
@@ -34,6 +34,11 @@ function runCli(args) {
       BROWSER_FLOW_VERIFY_SPEC_PATH: resolve(cliEnvRoot, "knowledge", "verify-spec", "override.json")
     }
   });
+}
+
+function writeArtifact(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 test("release unit suite ignores stale e2e entries outside e2e/all suites", () => {
@@ -120,22 +125,202 @@ test("schema and capabilities expose agent contract, support scope, risk, and la
   const schema = buildSchema();
   const capabilities = buildCapabilities();
   const verify = buildCommandSchema("verify");
+  const status = buildCommandSchema("status");
   const schemaVerify = schema.commands.find((command) => command.name === "verify");
+  const schemaStatus = schema.commands.find((command) => command.name === "status");
   const capabilityVerify = capabilities.commands.find((command) => command.name === "verify");
+  const capabilityStatus = capabilities.commands.find((command) => command.name === "status");
 
   assert.equal(schema.agentContract, true);
   assert.deepEqual(schema.supportScope, SUPPORT_SCOPE);
   assert.equal(schemaVerify.risk, "write");
   assert.equal(schemaVerify.layer, "pipeline");
+  assert.equal(schemaStatus.risk, "read");
+  assert.equal(schemaStatus.layer, "setup");
   assert.equal("requiredOptions" in verify.command, false);
   assert.equal("optionalOptions" in verify.command, false);
   assert.equal(verify.command.risk, "write");
   assert.equal(verify.command.layer, "pipeline");
+  assert.equal(status.command.risk, "read");
+  assert.equal(status.command.layer, "setup");
   assert.equal(capabilities.agentContract, true);
   assert.deepEqual(capabilities.supportScope, SUPPORT_SCOPE);
   assert.equal(capabilityVerify.risk, "write");
   assert.equal(capabilityVerify.layer, "pipeline");
+  assert.equal(capabilityStatus.risk, "read");
+  assert.equal(capabilityStatus.layer, "setup");
   assert.ok(verify.command.options.some((option) => option.name === "--screenshots" && option.type === "enum"));
+});
+
+test("status reports successClaimable from authoritative verification and security artifacts", (t) => {
+  const runId = `status-pass-${process.pid}-${Date.now()}`;
+  const runRoot = resolve(runtimeRoot, "artifacts", "runs", runId);
+  t.after(() => rmSync(runRoot, { recursive: true, force: true }));
+
+  writeArtifact(resolve(runRoot, "analysis", "workflow.json"), { schemaVersion: 1, runId, steps: [{ name: "open" }, { name: "click" }] });
+  writeArtifact(resolve(runRoot, "reports", "verification.json"), {
+    schemaVersion: 1,
+    success: true,
+    pathComplete: true,
+    executedSteps: ["open", "click"],
+    stepCount: 2,
+    transitionChecks: [],
+    securityOk: true,
+    replayOutcome: "passed",
+    verifiedAt: "2026-06-12T00:00:00.000Z"
+  });
+  writeArtifact(resolve(runRoot, "reports", "security.json"), { schemaVersion: 1, ok: true, findings: [] });
+  writeArtifact(resolve(runRoot, "reports", "verification-summary.json"), { schemaVersion: 1, runId });
+  writeArtifact(resolve(runRoot, "reports", "data-result.json"), {
+    schemaVersion: 1,
+    runId,
+    replayOutcome: "passed",
+    dataOutcome: "data"
+  });
+
+  const status = runCli(["status", "--run-id", runId]);
+
+  assert.equal(status.status, 0, status.stderr);
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.runId, runId);
+  assert.equal(payload.successClaimable, true);
+  assert.equal(payload.evidence.usesAuthoritativeArtifacts, true);
+  assert.equal(payload.evidence.journalUsedForSuccess, false);
+  assert.equal(payload.artifacts.workflow.exists, true);
+  assert.equal(payload.artifacts.verification.exists, true);
+  assert.equal(payload.artifacts.security.exists, true);
+  assert.equal(payload.artifacts.summary.exists, true);
+  assert.equal(payload.artifacts.dataResult.exists, true);
+  assert.equal(typeof payload.artifacts.verification.mtimeMs, "number");
+  assert.match(payload.artifacts.security.path, /reports\/security\.json$/);
+  assert.equal(payload.lastFailure, undefined);
+});
+
+test("status refuses successClaimable when executedSteps length mismatches stepCount", (t) => {
+  const runId = `status-mismatch-${process.pid}-${Date.now()}`;
+  const runRoot = resolve(runtimeRoot, "artifacts", "runs", runId);
+  t.after(() => rmSync(runRoot, { recursive: true, force: true }));
+
+  writeArtifact(resolve(runRoot, "analysis", "workflow.json"), { schemaVersion: 1, runId, steps: [{ name: "open" }, { name: "click" }] });
+  writeArtifact(resolve(runRoot, "reports", "verification.json"), {
+    schemaVersion: 1,
+    success: true,
+    pathComplete: true,
+    executedSteps: ["open"],
+    stepCount: 2,
+    transitionChecks: [],
+    securityOk: true,
+    replayOutcome: "passed",
+    verifiedAt: "2026-06-12T00:00:00.000Z"
+  });
+  writeArtifact(resolve(runRoot, "reports", "security.json"), { schemaVersion: 1, ok: true, findings: [] });
+  writeArtifact(resolve(runRoot, "reports", "verification-summary.json"), { schemaVersion: 1, runId });
+
+  const status = runCli(["status", "--run-id", runId]);
+
+  assert.equal(status.status, 0, status.stderr);
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.successClaimable, false);
+  assert.equal(payload.lastFailure.code, "executed_steps_mismatch");
+  assert.equal(payload.verification.executedSteps, 1);
+  assert.equal(payload.verification.stepCount, 2);
+});
+
+test("status refuses successClaimable when required verification summary is missing", (t) => {
+  const runId = `status-missing-summary-${process.pid}-${Date.now()}`;
+  const runRoot = resolve(runtimeRoot, "artifacts", "runs", runId);
+  t.after(() => rmSync(runRoot, { recursive: true, force: true }));
+
+  writeArtifact(resolve(runRoot, "analysis", "workflow.json"), { schemaVersion: 1, runId, steps: [{ name: "open" }] });
+  writeArtifact(resolve(runRoot, "reports", "verification.json"), {
+    schemaVersion: 1,
+    success: true,
+    pathComplete: true,
+    executedSteps: ["open"],
+    stepCount: 1,
+    transitionChecks: [],
+    securityOk: true,
+    replayOutcome: "passed",
+    verifiedAt: "2026-06-12T00:00:00.000Z"
+  });
+  writeArtifact(resolve(runRoot, "reports", "security.json"), { schemaVersion: 1, ok: true, findings: [] });
+
+  const status = runCli(["status", "--run-id", runId]);
+
+  assert.equal(status.status, 0, status.stderr);
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.successClaimable, false);
+  assert.equal(payload.lastFailure.code, "summary_missing");
+  assert.equal(payload.lastFailure.artifact, "summary");
+  assert.equal(payload.artifacts.summary.exists, false);
+});
+
+test("status refuses successClaimable when required workflow is malformed", (t) => {
+  const runId = `status-malformed-workflow-${process.pid}-${Date.now()}`;
+  const runRoot = resolve(runtimeRoot, "artifacts", "runs", runId);
+  t.after(() => rmSync(runRoot, { recursive: true, force: true }));
+
+  mkdirSync(resolve(runRoot, "analysis"), { recursive: true });
+  writeFileSync(resolve(runRoot, "analysis", "workflow.json"), "{not-json", "utf8");
+  writeArtifact(resolve(runRoot, "reports", "verification.json"), {
+    schemaVersion: 1,
+    success: true,
+    pathComplete: true,
+    executedSteps: ["open"],
+    stepCount: 1,
+    transitionChecks: [],
+    securityOk: true,
+    replayOutcome: "passed",
+    verifiedAt: "2026-06-12T00:00:00.000Z"
+  });
+  writeArtifact(resolve(runRoot, "reports", "security.json"), { schemaVersion: 1, ok: true, findings: [] });
+  writeArtifact(resolve(runRoot, "reports", "verification-summary.json"), { schemaVersion: 1, runId });
+
+  const status = runCli(["status", "--run-id", runId]);
+
+  assert.equal(status.status, 0, status.stderr);
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.successClaimable, false);
+  assert.equal(payload.lastFailure.code, "workflow_malformed");
+  assert.equal(payload.lastFailure.artifact, "workflow");
+  assert.equal(payload.artifacts.workflow.parseOk, false);
+});
+
+test("status refuses successClaimable when optional data result exists but is malformed", (t) => {
+  const runId = `status-malformed-data-result-${process.pid}-${Date.now()}`;
+  const runRoot = resolve(runtimeRoot, "artifacts", "runs", runId);
+  t.after(() => rmSync(runRoot, { recursive: true, force: true }));
+
+  writeArtifact(resolve(runRoot, "analysis", "workflow.json"), { schemaVersion: 1, runId, steps: [{ name: "open" }] });
+  writeArtifact(resolve(runRoot, "reports", "verification.json"), {
+    schemaVersion: 1,
+    success: true,
+    pathComplete: true,
+    executedSteps: ["open"],
+    stepCount: 1,
+    transitionChecks: [],
+    securityOk: true,
+    replayOutcome: "passed",
+    verifiedAt: "2026-06-12T00:00:00.000Z"
+  });
+  writeArtifact(resolve(runRoot, "reports", "security.json"), { schemaVersion: 1, ok: true, findings: [] });
+  writeArtifact(resolve(runRoot, "reports", "verification-summary.json"), { schemaVersion: 1, runId });
+  mkdirSync(resolve(runRoot, "reports"), { recursive: true });
+  writeFileSync(resolve(runRoot, "reports", "data-result.json"), "{not-json", "utf8");
+
+  const status = runCli(["status", "--run-id", runId]);
+
+  assert.equal(status.status, 0, status.stderr);
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.successClaimable, false);
+  assert.equal(payload.lastFailure.code, "dataResult_malformed");
+  assert.equal(payload.lastFailure.artifact, "dataResult");
+  assert.equal(payload.artifacts.dataResult.parseOk, false);
 });
 
 test("command-specific help exposes risk and layer", () => {
