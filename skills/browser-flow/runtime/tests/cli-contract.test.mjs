@@ -11,6 +11,15 @@ import { invalidUsage, missingRequiredOption, classifyCliError, formatHumanCliEr
 
 const runtimeRoot = resolve(import.meta.dirname, "..");
 const cliEnvRoot = mkdtempSync(resolve(tmpdir(), "bf-cli-env-"));
+const ALLOWED_RISKS = new Set(["read", "write", "high-risk-write", "interactive"]);
+const ALLOWED_LAYERS = new Set(["setup", "pipeline", "reuse", "review", "promotion", "recovery", "raw-browser"]);
+
+function hasMeaningfulWrittenArtifacts(entry) {
+  return entry.writtenArtifacts.some((artifact) => {
+    const normalized = artifact.trim().toLowerCase();
+    return normalized.length > 0 && normalized !== "none.";
+  });
+}
 
 function runCli(args) {
   return spawnSync(process.execPath, ["scripts/cli-main.mjs", ...args], {
@@ -73,6 +82,8 @@ test("command registry and metadata stay in parity", () => {
   for (const name of registryNames) assert.ok(metadataNames.has(name), `missing metadata for ${name}`);
 
   for (const entry of COMMANDS.filter((command) => command.classification === "public")) {
+    assert.ok(ALLOWED_RISKS.has(entry.risk), `${entry.name} risk missing or unknown`);
+    assert.ok(ALLOWED_LAYERS.has(entry.layer), `${entry.name} layer missing or unknown`);
     assert.ok(entry.output, `${entry.name} output missing`);
     assert.equal(typeof entry.mutating, "boolean", `${entry.name} mutating missing`);
     assert.ok(entry.sideEffects.length > 0, `${entry.name} sideEffects missing`);
@@ -81,18 +92,58 @@ test("command registry and metadata stay in parity", () => {
   }
 });
 
-test("schema and capabilities expose agent contract and macos support scope", () => {
+test("non-read commands are always marked mutating", () => {
+  for (const entry of COMMANDS) {
+    if (entry.risk === "read") continue;
+
+    assert.equal(entry.mutating, true, `${entry.name} risk ${entry.risk} must be mutating`);
+  }
+});
+
+test("commands that mutate the registry are always marked mutating", () => {
+  for (const entry of COMMANDS) {
+    if (entry.registryMutation === "none") continue;
+
+    assert.equal(entry.mutating, true, `${entry.name} registry mutation ${entry.registryMutation} must be mutating`);
+  }
+});
+
+test("commands with meaningful written artifacts are always marked mutating", () => {
+  for (const entry of COMMANDS) {
+    if (!hasMeaningfulWrittenArtifacts(entry)) continue;
+
+    assert.equal(entry.mutating, true, `${entry.name} written artifacts must be mutating`);
+  }
+});
+
+test("schema and capabilities expose agent contract, support scope, risk, and layer", () => {
   const schema = buildSchema();
   const capabilities = buildCapabilities();
   const verify = buildCommandSchema("verify");
+  const schemaVerify = schema.commands.find((command) => command.name === "verify");
+  const capabilityVerify = capabilities.commands.find((command) => command.name === "verify");
 
   assert.equal(schema.agentContract, true);
   assert.deepEqual(schema.supportScope, SUPPORT_SCOPE);
+  assert.equal(schemaVerify.risk, "write");
+  assert.equal(schemaVerify.layer, "pipeline");
   assert.equal("requiredOptions" in verify.command, false);
   assert.equal("optionalOptions" in verify.command, false);
+  assert.equal(verify.command.risk, "write");
+  assert.equal(verify.command.layer, "pipeline");
   assert.equal(capabilities.agentContract, true);
   assert.deepEqual(capabilities.supportScope, SUPPORT_SCOPE);
+  assert.equal(capabilityVerify.risk, "write");
+  assert.equal(capabilityVerify.layer, "pipeline");
   assert.ok(verify.command.options.some((option) => option.name === "--screenshots" && option.type === "enum"));
+});
+
+test("command-specific help exposes risk and layer", () => {
+  const help = runCli(["verify", "--help"]);
+
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /Risk: write/);
+  assert.match(help.stdout, /Layer: pipeline/);
 });
 
 test("completion exposes command-aware flags and enum values", () => {

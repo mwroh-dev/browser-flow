@@ -33,9 +33,11 @@ single `runId`:
 prepare → done → analyze → generate → verify
 ```
 
-`bf doctor` is a side-channel read-only command that surveys
-the resulting page-node store. It is invoked AFTER generate
-(or verify), not in the main pipeline.
+`bf doctor` is a side-channel diagnostic command that surveys
+the resulting page-node store. It may create missing bootstrap
+directories before reporting status, so treat it as a write-risk
+diagnostic, not as a pure read-only command. It is invoked AFTER
+generate (or verify), not in the main pipeline.
 
 ## Procedure
 
