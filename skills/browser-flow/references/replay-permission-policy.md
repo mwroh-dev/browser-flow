@@ -40,3 +40,16 @@ clicks, while observation events remain excluded from replay.
   with risk acknowledgement.
 - URL-state reduction is allowed only for pure navigation or action-free
   final-state URLs. Same-page controls remain `state-proof-replay`.
+
+## Split-Flow Browser Attach
+
+- For named project work, claim a CDP registry port before launching an attached
+  browser: `node ~/.cdp-port-registry.mjs claim --name <project-task> --owner codex --kind cdp`.
+- Launch the human-held browser with `serve-browser --port <claimed-port>` and
+  attach verification with `verify --attach <claimed-port>`. Use the same
+  claimed port for both sides of the split flow.
+- `9222` is reserved for generic one-off attach sessions. Do not use it as a
+  named workflow default in docs, examples, or agent instructions.
+- An attached browser grants access to live browser state only. It does not
+  relax replay permission levels, allow direct URL construction, or replace the
+  authoritative verification/security artifacts required for success claims.

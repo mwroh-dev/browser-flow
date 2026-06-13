@@ -34,6 +34,14 @@ export const COMMAND_GROUPS = [
  * }} CommandOption
  *
  * @typedef {{
+ *   role: "server" | "client",
+ *   counterpart: string,
+ *   portSource: string,
+ *   commands: string[],
+ *   notes: string[]
+ * }} SplitFlowMetadata
+ *
+ * @typedef {{
  *   name: string,
  *   group: string,
  *   risk: "read" | "write" | "high-risk-write" | "interactive",
@@ -52,6 +60,7 @@ export const COMMAND_GROUPS = [
  *   writtenArtifacts: string[],
  *   registryMutation: "none" | "conditional-upsert" | "required-upsert",
  *   safetyImplications: string[],
+ *   splitFlow?: SplitFlowMetadata,
  *   mutating: boolean
  * }} CommandMetadata
  */
@@ -153,7 +162,21 @@ export const COMMANDS = [
     defaults: { port: 9222, profile: "profiles/attach/<runId-or-default>" },
     readArtifacts: ["artifacts/runs/<id>/workflow.json when --url is omitted"],
     writtenArtifacts: ["profiles/attach/<runId-or-default>/"],
-    safetyImplications: ["Authentication remains in the live browser/profile and is not persisted to workflow artifacts."]
+    safetyImplications: ["Authentication remains in the live browser/profile and is not persisted to workflow artifacts."],
+    splitFlow: {
+      role: "server",
+      counterpart: "verify",
+      portSource: "Use a claimed CDP registry port for named work; 9222 is only for generic one-off attach sessions.",
+      commands: [
+        "node ~/.cdp-port-registry.mjs claim --name <project-task> --owner codex --kind cdp",
+        "browser-flow serve-browser --run-id <id> --port <claimed-port>",
+        "browser-flow verify --run-id <id> --attach <claimed-port>"
+      ],
+      notes: [
+        "The browser remains open for human login or manual state setup.",
+        "The attach verifier must use the same claimed port and must not construct browser URLs directly."
+      ]
+    }
   }),
   command({
     name: "completion",
@@ -343,7 +366,21 @@ export const COMMANDS = [
     readArtifacts: ["artifacts/runs/<id>/workflow.json", "artifacts/runs/<id>/generated/runner.mjs"],
     writtenArtifacts: ["artifacts/runs/<id>/reports/verification.json", "artifacts/runs/<id>/reports/security.json", "state-journal.jsonl", "optional screenshots", "knowledge/registry/workflows.json when gates allow"],
     registryMutation: "conditional-upsert",
-    safetyImplications: ["Do not declare success unless verification.json and security.json are both green."]
+    safetyImplications: ["Do not declare success unless verification.json and security.json are both green."],
+    splitFlow: {
+      role: "client",
+      counterpart: "serve-browser",
+      portSource: "Use the same claimed CDP registry port that launched serve-browser.",
+      commands: [
+        "node ~/.cdp-port-registry.mjs claim --name <project-task> --owner codex --kind cdp",
+        "browser-flow serve-browser --run-id <id> --port <claimed-port>",
+        "browser-flow verify --run-id <id> --attach <claimed-port>"
+      ],
+      notes: [
+        "--attach consumes an already-open browser profile; it does not prove success without authoritative verification and security artifacts.",
+        "Named attach flows must avoid hardcoded 9222 and release the registry claim when the workflow is no longer active."
+      ]
+    }
   }),
   command({
     name: "vars",
@@ -814,7 +851,7 @@ JSON errors:
 };
 
 /**
- * @param {Omit<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating"> & Partial<Pick<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating">>} input
+ * @param {Omit<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "splitFlow" | "mutating"> & Partial<Pick<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "splitFlow" | "mutating">>} input
  * @returns {CommandMetadata}
  */
 function command(input) {
@@ -914,7 +951,18 @@ export function renderCommandHelp(name) {
     formatList(entry.artifacts),
     "",
     "Related commands:",
-    formatList(entry.related)
+    formatList(entry.related),
+    ...(entry.splitFlow ? [
+      "",
+      "Split-flow browser attach:",
+      `  Role: ${entry.splitFlow.role}`,
+      `  Counterpart: ${entry.splitFlow.counterpart}`,
+      `  Port source: ${entry.splitFlow.portSource}`,
+      "  Commands:",
+      formatList(entry.splitFlow.commands),
+      "  Notes:",
+      formatList(entry.splitFlow.notes)
+    ] : [])
   ].join("\n");
 }
 
@@ -948,6 +996,7 @@ export function buildCapabilities() {
       mutating: entry.mutating,
       registryMutation: entry.registryMutation,
       safetyImplications: entry.safetyImplications,
+      ...(entry.splitFlow ? { splitFlow: entry.splitFlow } : {}),
       relatedCommands: entry.related
     }))
   };
@@ -1003,6 +1052,7 @@ function commandSchema(entry) {
     writtenArtifacts: entry.writtenArtifacts,
     registryMutation: entry.registryMutation,
     safetyImplications: entry.safetyImplications,
+    ...(entry.splitFlow ? { splitFlow: entry.splitFlow } : {}),
     relatedCommands: entry.related
   };
 }

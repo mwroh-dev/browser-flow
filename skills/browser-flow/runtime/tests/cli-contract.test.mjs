@@ -8,6 +8,7 @@ import test from "node:test";
 import { COMMANDS, buildCapabilities, buildCommandSchema, buildSchema, SUPPORT_SCOPE } from "../scripts/lib/cli-metadata.mjs";
 import { COMMAND_REGISTRY } from "../scripts/lib/cli-registry.mjs";
 import { invalidUsage, missingRequiredOption, classifyCliError, formatHumanCliError, formatJsonCliError } from "../scripts/lib/cli-errors.mjs";
+import { withCliNotices } from "../scripts/lib/cli-notices.mjs";
 
 const runtimeRoot = resolve(import.meta.dirname, "..");
 const cliEnvRoot = mkdtempSync(resolve(tmpdir(), "bf-cli-env-"));
@@ -150,6 +151,59 @@ test("schema and capabilities expose agent contract, support scope, risk, and la
   assert.equal(capabilityStatus.risk, "read");
   assert.equal(capabilityStatus.layer, "setup");
   assert.ok(verify.command.options.some((option) => option.name === "--screenshots" && option.type === "enum"));
+});
+
+test("structured notices are additive on json results", () => {
+  const payload = withCliNotices({ ok: true, value: 1 }, [
+    {
+      severity: "warning",
+      code: "needs_authoritative_status",
+      message: "Check browser-flow status before claiming success.",
+      suggestedCommands: ["browser-flow status --run-id demo"]
+    }
+  ]);
+
+  assert.deepEqual(payload, {
+    ok: true,
+    value: 1,
+    notices: [
+      {
+        severity: "warning",
+        code: "needs_authoritative_status",
+        message: "Check browser-flow status before claiming success.",
+        suggestedCommands: ["browser-flow status --run-id demo"]
+      }
+    ]
+  });
+});
+
+test("status emits a notice when success cannot be claimed", () => {
+  const status = runCli(["status", "--run-id", "missing-notice-run"]);
+
+  assert.equal(status.status, 0, status.stderr);
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.successClaimable, false);
+  assert.equal(payload.notices[0].severity, "warning");
+  assert.equal(payload.notices[0].code, "success_not_claimable");
+  assert.ok(payload.notices[0].suggestedCommands.includes("browser-flow verify --run-id missing-notice-run"));
+});
+
+test("schema and help expose split-flow browser attach metadata", () => {
+  const verify = buildCommandSchema("verify").command;
+  const serveBrowser = buildCommandSchema("serve-browser").command;
+  const capabilities = buildCapabilities();
+  const capabilityVerify = capabilities.commands.find((command) => command.name === "verify");
+  const help = runCli(["serve-browser", "--help"]);
+
+  assert.equal(verify.splitFlow.role, "client");
+  assert.equal(verify.splitFlow.counterpart, "serve-browser");
+  assert.match(verify.splitFlow.portSource, /claimed CDP registry port/);
+  assert.equal(serveBrowser.splitFlow.role, "server");
+  assert.equal(serveBrowser.splitFlow.counterpart, "verify");
+  assert.equal(capabilityVerify.splitFlow.role, "client");
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /Split-flow browser attach:/);
+  assert.match(help.stdout, /node ~\/\.cdp-port-registry\.mjs claim/);
 });
 
 test("status reports successClaimable from authoritative verification and security artifacts", (t) => {

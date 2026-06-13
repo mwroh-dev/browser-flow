@@ -27,6 +27,12 @@ or documentation artifact.
 | Generate | `agents/generator/AGENT.md`; `agents/generator/openai.yaml`; `references/artifact-schemas.md`; `references/replay-permission-policy.md` | `node runtime/scripts/cli.mjs generate --run-id <id>` |
 | Verify | `agents/verifier/AGENT.md`; `agents/verifier/openai.yaml`; `references/verification-rules.md`; `references/replay-permission-policy.md`; `references/checkpoint-contracts.md` | `node runtime/scripts/cli.mjs verify --run-id <id> [--headless]` |
 
+For login-required or other human-held browser state, split the Verify entry
+into an explicit attach flow: claim a named CDP registry port, run
+`node runtime/scripts/cli.mjs serve-browser --run-id <id> --port <claimed-port>`,
+then run `node runtime/scripts/cli.mjs verify --run-id <id> --attach <claimed-port>`.
+Named project work must use the registry claim instead of hardcoded `9222`.
+
 ## Phase Boundary Rules
 
 - Load only the projected view for the active phase.
@@ -34,3 +40,6 @@ or documentation artifact.
 - Do not load other agents' identities or unrelated phase references at that
   phase boundary.
 - Optional operations such as Extract and Compose are not numbered core phases.
+- A split-flow browser attach is still part of Verify. It only supplies browser
+  state; success still depends on authoritative verification and security
+  artifacts.
