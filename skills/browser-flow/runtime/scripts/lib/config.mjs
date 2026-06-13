@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { invalidUsage } from "./cli-errors.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const defaultChromePath = process.env.BROWSER_FLOW_CHROME_PATH ??
@@ -24,9 +25,16 @@ const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
  */
 export function validateRunId(runId) {
   if (typeof runId !== "string" || !RUN_ID_PATTERN.test(runId)) {
-    throw new Error(
+    throw invalidUsage(
       `Invalid runId ${JSON.stringify(runId)}. Must match ${String(RUN_ID_PATTERN)} ` +
-      `(start alphanumeric; only letters, digits, dot, underscore, dash; no slashes or "..", max 80 chars).`
+      `(start alphanumeric; only letters, digits, dot, underscore, dash; no slashes or "..", max 80 chars).`,
+      ["browser-flow help"],
+      {
+        subtype: "invalid_run_id",
+        param: "--run-id",
+        hint: "Pass a --run-id that starts alphanumeric and uses only letters, digits, dot, underscore, or dash.",
+        retryable: false
+      }
     );
   }
   return runId;
@@ -238,8 +246,15 @@ const PROFILE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,59}$/;
  */
 export function profilePath(profileName) {
   if (typeof profileName !== "string" || !PROFILE_NAME_PATTERN.test(profileName)) {
-    throw new Error(
-      `Invalid profile name "${profileName}". Must match ${String(PROFILE_NAME_PATTERN)} (lowercase alphanumeric + dash, 1-60 chars, must start with alphanumeric).`
+    throw invalidUsage(
+      `Invalid profile name "${profileName}". Must match ${String(PROFILE_NAME_PATTERN)} (lowercase alphanumeric + dash, 1-60 chars, must start with alphanumeric).`,
+      ["browser-flow prepare --help"],
+      {
+        subtype: "invalid_profile_name",
+        param: "--profile-name",
+        hint: "Pass a --profile-name that is lowercase alphanumeric plus dash, 1-60 chars, starting alphanumeric.",
+        retryable: false
+      }
     );
   }
   return resolve(getProfilesRoot(), profileName);

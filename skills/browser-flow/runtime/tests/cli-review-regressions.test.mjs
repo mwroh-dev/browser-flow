@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { classifyCliError, CliError } from "../scripts/lib/cli-errors.mjs";
+import { validateRunId, profilePath } from "../scripts/lib/config.mjs";
 import { chromeCheck, directoryWritableStatus, doctorCommand } from "../scripts/commands/doctor.mjs";
 import { renderCompletion } from "../scripts/lib/completion.mjs";
 import { parseCommandLine } from "../scripts/lib/args.mjs";
@@ -405,4 +406,46 @@ test("scan-artifacts classifies recorded network sessionIds as opaque runtime id
   const source = readFileSync(resolve(runtimeRoot, "scripts/security/scan-artifacts.mjs"), "utf8");
   assert.match(source, /fieldName === "sessionId"/);
   assert.match(source, /network-summary\.json/);
+});
+
+// Typed-error coverage at interior validators: a malformed --run-id value is a
+// fixable input error, not a runtime crash. It must classify as invalid_usage
+// (exit 2, recoverable) and carry the typed contract fields so an agent can
+// distinguish "fix your input and retry" from "the tool died".
+test("validateRunId rejects malformed run ids with a typed invalid_usage error", () => {
+  let thrown;
+  try {
+    validateRunId("__does_not_exist__");
+  } catch (error) {
+    thrown = error;
+  }
+  assert.ok(thrown instanceof CliError, "expected a CliError");
+  const failure = classifyCliError(thrown);
+  assert.equal(failure.code, "invalid_usage");
+  assert.equal(failure.exitCode, 2);
+  assert.equal(failure.recoverable, true);
+  assert.equal(failure.type, "validation");
+  assert.equal(failure.subtype, "invalid_run_id");
+  assert.equal(failure.param, "--run-id");
+  assert.equal(failure.retryable, false);
+  assert.match(thrown.message, /Invalid runId/);
+});
+
+test("validateRunId accepts a well-formed run id unchanged", () => {
+  assert.equal(validateRunId("ghostrun"), "ghostrun");
+});
+
+test("profilePath rejects malformed profile names with a typed invalid_usage error", () => {
+  let thrown;
+  try {
+    profilePath("Bad Profile!");
+  } catch (error) {
+    thrown = error;
+  }
+  assert.ok(thrown instanceof CliError, "expected a CliError");
+  const failure = classifyCliError(thrown);
+  assert.equal(failure.code, "invalid_usage");
+  assert.equal(failure.exitCode, 2);
+  assert.equal(failure.param, "--profile-name");
+  assert.equal(failure.subtype, "invalid_profile_name");
 });
