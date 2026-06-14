@@ -155,11 +155,14 @@ function readOptionalJson(path) {
 function artifactStatus(path) {
   try {
     const stats = statSync(path);
+    const mtime = stats.mtime instanceof Date && !Number.isNaN(stats.mtime.getTime())
+      ? stats.mtime.toISOString()
+      : undefined;
     return {
       path,
       exists: true,
       mtimeMs: stats.mtimeMs,
-      mtime: stats.mtime.toISOString()
+      ...(mtime ? { mtime } : {})
     };
   } catch {
     return { path, exists: false };

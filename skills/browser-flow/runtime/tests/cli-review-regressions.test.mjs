@@ -35,6 +35,8 @@ test("CliError constructor ignores nullish and non-object metadata", () => {
   const nullMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], null);
   const scalarMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], "not metadata");
   const arrayMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], ["not", "metadata"]);
+  const dateMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], new Date("2026-06-12T00:00:00.000Z"));
+  const regexMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], /not metadata/);
 
   assert.equal(nullMetadata.type, "validation");
   assert.equal(nullMetadata.subtype, undefined);
@@ -42,6 +44,13 @@ test("CliError constructor ignores nullish and non-object metadata", () => {
   assert.equal(scalarMetadata.subtype, undefined);
   assert.equal(arrayMetadata.type, "validation");
   assert.equal(arrayMetadata.subtype, undefined);
+  assert.equal(dateMetadata.type, "validation");
+  assert.equal(dateMetadata.subtype, undefined);
+  assert.equal(regexMetadata.type, "validation");
+  assert.equal(regexMetadata.subtype, undefined);
+
+  const source = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-errors.mjs"), "utf8");
+  assert.match(source, /Object\.getPrototypeOf\(metadata\) === Object\.prototype/);
 });
 
 test("filesystem stat helpers tolerate races and vanished entries", () => {
@@ -52,6 +61,8 @@ test("filesystem stat helpers tolerate races and vanished entries", () => {
 
   assert.match(statusReport, /function artifactStatus\(path\) \{[\s\S]*try \{[\s\S]*statSync\(path\)[\s\S]*catch/s);
   assert.doesNotMatch(statusReport, /function artifactStatus\(path\) \{[\s\S]*existsSync\(path\)/s);
+  assert.match(statusReport, /stats\.mtime instanceof Date && !Number\.isNaN\(stats\.mtime\.getTime\(\)\)/);
+  assert.doesNotMatch(statusReport, /mtime:\s*stats\.mtime\.toISOString\(\)/);
   assert.match(fsHelper, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);
   assert.match(testRunner, /try \{[\s\S]*statSync\(abs\)[\s\S]*catch/s);
   assert.match(linter, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);

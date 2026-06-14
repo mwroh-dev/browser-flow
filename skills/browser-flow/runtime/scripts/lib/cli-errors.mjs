@@ -149,7 +149,7 @@ export class CliError extends Error {
  * @returns {metadata is CliErrorMetadata}
  */
 function isMetadataRecord(metadata) {
-  return metadata !== null && typeof metadata === "object" && !Array.isArray(metadata);
+  return metadata !== null && typeof metadata === "object" && Object.getPrototypeOf(metadata) === Object.prototype;
 }
 
 export function invalidUsage(message, suggestedCommands = ["browser-flow help"], metadata = {}) {
