@@ -148,14 +148,18 @@ function readOptionalJson(path) {
  * @returns {ArtifactStatus}
  */
 function artifactStatus(path) {
-  if (!existsSync(path)) return { path, exists: false };
-  const stats = statSync(path);
-  return {
-    path,
-    exists: true,
-    mtimeMs: stats.mtimeMs,
-    mtime: stats.mtime.toISOString()
-  };
+  try {
+    if (!existsSync(path)) return { path, exists: false };
+    const stats = statSync(path);
+    return {
+      path,
+      exists: true,
+      mtimeMs: stats.mtimeMs,
+      mtime: stats.mtime.toISOString()
+    };
+  } catch {
+    return { path, exists: false };
+  }
 }
 
 /**

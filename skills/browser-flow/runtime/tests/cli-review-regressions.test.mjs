@@ -31,6 +31,28 @@ test("classifyCliError does not regex-classify plain object message values", () 
   assert.equal(failure.message, "requires --run-id");
 });
 
+test("CliError constructor ignores nullish and non-object metadata", () => {
+  const nullMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], null);
+  const scalarMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], "not metadata");
+
+  assert.equal(nullMetadata.type, "validation");
+  assert.equal(nullMetadata.subtype, undefined);
+  assert.equal(scalarMetadata.type, "validation");
+  assert.equal(scalarMetadata.subtype, undefined);
+});
+
+test("filesystem stat helpers tolerate races and vanished entries", () => {
+  const statusReport = readFileSync(resolve(runtimeRoot, "scripts/lib/status-report.mjs"), "utf8");
+  const fsHelper = readFileSync(resolve(runtimeRoot, "scripts/lib/fs.mjs"), "utf8");
+  const testRunner = readFileSync(resolve(runtimeRoot, "scripts/test/run-suite.mjs"), "utf8");
+  const linter = readFileSync(resolve(runtimeRoot, "scripts/lint.mjs"), "utf8");
+
+  assert.match(statusReport, /function artifactStatus\(path\) \{[\s\S]*try \{[\s\S]*statSync\(path\)[\s\S]*catch/s);
+  assert.match(fsHelper, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);
+  assert.match(testRunner, /try \{[\s\S]*statSync\(abs\)[\s\S]*catch/s);
+  assert.match(linter, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);
+});
+
 test("doctor npm version check uses shell execution on Windows", () => {
   const source = readFileSync(resolve(runtimeRoot, "scripts/commands/doctor.mjs"), "utf8");
 

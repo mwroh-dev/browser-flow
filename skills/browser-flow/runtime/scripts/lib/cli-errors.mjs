@@ -124,7 +124,7 @@ export class CliError extends Error {
    * @param {string} code
    * @param {string} message
    * @param {string[]} [suggestedCommands]
-   * @param {CliErrorMetadata} [metadata]
+   * @param {CliErrorMetadata | unknown} [metadata]
    */
   constructor(code, message, suggestedCommands = [], metadata = {}) {
     super(message);
@@ -134,13 +134,22 @@ export class CliError extends Error {
     this.exitCode = definition?.status ?? 1;
     this.recoverable = definition?.recoverable ?? false;
     this.suggestedCommands = suggestedCommands;
-    this.type = metadata.type ?? typeForCode(code);
-    if (metadata.subtype !== undefined) this.subtype = metadata.subtype;
-    if (metadata.hint !== undefined) this.hint = metadata.hint;
-    if (metadata.param !== undefined) this.param = metadata.param;
-    if (metadata.artifacts !== undefined) this.artifacts = metadata.artifacts;
-    if (metadata.retryable !== undefined) this.retryable = metadata.retryable;
+    const meta = isMetadataRecord(metadata) ? metadata : {};
+    this.type = meta.type ?? typeForCode(code);
+    if (meta.subtype !== undefined) this.subtype = meta.subtype;
+    if (meta.hint !== undefined) this.hint = meta.hint;
+    if (meta.param !== undefined) this.param = meta.param;
+    if (meta.artifacts !== undefined) this.artifacts = meta.artifacts;
+    if (meta.retryable !== undefined) this.retryable = meta.retryable;
   }
+}
+
+/**
+ * @param {unknown} metadata
+ * @returns {metadata is CliErrorMetadata}
+ */
+function isMetadataRecord(metadata) {
+  return metadata !== null && typeof metadata === "object";
 }
 
 export function invalidUsage(message, suggestedCommands = ["browser-flow help"], metadata = {}) {
