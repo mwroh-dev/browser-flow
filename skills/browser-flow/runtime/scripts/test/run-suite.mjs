@@ -58,7 +58,13 @@ function walkTests(dir) {
   if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
     const abs = resolve(dir, name);
-    if (statSync(abs).isDirectory()) out.push(...walkTests(abs));
+    let stats;
+    try {
+      stats = statSync(abs);
+    } catch {
+      continue;
+    }
+    if (stats.isDirectory()) out.push(...walkTests(abs));
     else if (name.endsWith(".test.mjs")) out.push(relative(repoRoot, abs).split(sep).join("/"));
   }
   return out;

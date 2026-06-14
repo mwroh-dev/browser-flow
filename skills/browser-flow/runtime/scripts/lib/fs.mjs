@@ -36,7 +36,12 @@ export function listFilesRecursive(path) {
   const results = [];
   for (const entry of readdirSync(path)) {
     const fullPath = join(path, entry);
-    const stats = statSync(fullPath);
+    let stats;
+    try {
+      stats = statSync(fullPath);
+    } catch {
+      continue;
+    }
     if (stats.isDirectory()) {
       results.push(...listFilesRecursive(fullPath));
       continue;

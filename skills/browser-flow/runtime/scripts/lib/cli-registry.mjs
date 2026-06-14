@@ -19,6 +19,7 @@ const COMMAND_LOADERS = {
   analyze: async () => (await import("../commands/analyze.mjs")).analyzeCommand,
   generate: async () => (await import("../commands/generate.mjs")).generateCommand,
   verify: async () => (await import("../commands/verify.mjs")).verifyCommand,
+  status: async () => (await import("../commands/status.mjs")).statusCommand,
   doctor: async () => (await import("../commands/doctor.mjs")).doctorCommand,
   vars: async () => (await import("../commands/vars.mjs")).varsCommand,
   run: async () => (await import("../commands/run.mjs")).runCommand,

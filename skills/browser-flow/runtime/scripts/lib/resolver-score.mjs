@@ -32,7 +32,7 @@ function toArr(/** @type {unknown} */ v) { return Array.isArray(v) ? v : (v ? [S
  * @returns {Record<string, unknown>}
  */
 function toObj(value) {
-  return value && typeof value === "object" && !Array.isArray(value)
+  return value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype
     ? /** @type {Record<string, unknown>} */ (value)
     : {};
 }

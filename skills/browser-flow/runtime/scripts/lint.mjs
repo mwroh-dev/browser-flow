@@ -14,7 +14,12 @@ function collectFiles(root) {
   const entries = [];
   for (const name of readdirSync(root)) {
     const fullPath = join(root, name);
-    const stats = statSync(fullPath);
+    let stats;
+    try {
+      stats = statSync(fullPath);
+    } catch {
+      continue;
+    }
     if (stats.isDirectory()) {
       entries.push(...collectFiles(fullPath));
       continue;

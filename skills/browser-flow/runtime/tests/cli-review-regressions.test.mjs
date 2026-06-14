@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { classifyCliError, CliError } from "../scripts/lib/cli-errors.mjs";
+import { validateRunId, profilePath } from "../scripts/lib/config.mjs";
 import { chromeCheck, directoryWritableStatus, doctorCommand } from "../scripts/commands/doctor.mjs";
 import { renderCompletion } from "../scripts/lib/completion.mjs";
 import { parseCommandLine } from "../scripts/lib/args.mjs";
@@ -28,6 +29,52 @@ test("classifyCliError does not regex-classify plain object message values", () 
 
   assert.equal(failure.code, "runtime_error");
   assert.equal(failure.message, "requires --run-id");
+});
+
+test("CliError constructor ignores nullish and non-object metadata", () => {
+  const nullMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], null);
+  const scalarMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], "not metadata");
+  const arrayMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], ["not", "metadata"]);
+  const dateMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], new Date("2026-06-12T00:00:00.000Z"));
+  const regexMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], /not metadata/);
+
+  assert.equal(nullMetadata.type, "validation");
+  assert.equal(nullMetadata.subtype, undefined);
+  assert.equal(scalarMetadata.type, "validation");
+  assert.equal(scalarMetadata.subtype, undefined);
+  assert.equal(arrayMetadata.type, "validation");
+  assert.equal(arrayMetadata.subtype, undefined);
+  assert.equal(dateMetadata.type, "validation");
+  assert.equal(dateMetadata.subtype, undefined);
+  assert.equal(regexMetadata.type, "validation");
+  assert.equal(regexMetadata.subtype, undefined);
+
+  const source = readFileSync(resolve(runtimeRoot, "scripts/lib/cli-errors.mjs"), "utf8");
+  assert.match(source, /Object\.getPrototypeOf\(metadata\) === Object\.prototype/);
+});
+
+test("filesystem stat helpers tolerate races and vanished entries", () => {
+  const statusReport = readFileSync(resolve(runtimeRoot, "scripts/lib/status-report.mjs"), "utf8");
+  const fsHelper = readFileSync(resolve(runtimeRoot, "scripts/lib/fs.mjs"), "utf8");
+  const testRunner = readFileSync(resolve(runtimeRoot, "scripts/test/run-suite.mjs"), "utf8");
+  const linter = readFileSync(resolve(runtimeRoot, "scripts/lint.mjs"), "utf8");
+
+  assert.match(statusReport, /function artifactStatus\(path\) \{[\s\S]*try \{[\s\S]*statSync\(path\)[\s\S]*catch/s);
+  assert.doesNotMatch(statusReport, /function artifactStatus\(path\) \{[\s\S]*existsSync\(path\)/s);
+  assert.match(statusReport, /stats\.mtime instanceof Date && !Number\.isNaN\(stats\.mtime\.getTime\(\)\)/);
+  assert.doesNotMatch(statusReport, /mtime:\s*stats\.mtime\.toISOString\(\)/);
+  assert.match(fsHelper, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);
+  assert.match(testRunner, /try \{[\s\S]*statSync\(abs\)[\s\S]*catch/s);
+  assert.match(linter, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);
+});
+
+test("status report checks artifact failures before semantic content failures", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/lib/status-report.mjs"), "utf8");
+
+  assert.match(source, /const artifactFailure = firstFailure\(\[/);
+  assert.match(source, /let lastFailure = artifactFailure;/);
+  assert.match(source, /if \(lastFailure === undefined\) \{/);
+  assert.doesNotMatch(source, /const lastFailure = firstFailure\(\[/);
 });
 
 test("doctor npm version check uses shell execution on Windows", () => {
@@ -405,4 +452,46 @@ test("scan-artifacts classifies recorded network sessionIds as opaque runtime id
   const source = readFileSync(resolve(runtimeRoot, "scripts/security/scan-artifacts.mjs"), "utf8");
   assert.match(source, /fieldName === "sessionId"/);
   assert.match(source, /network-summary\.json/);
+});
+
+// Typed-error coverage at interior validators: a malformed --run-id value is a
+// fixable input error, not a runtime crash. It must classify as invalid_usage
+// (exit 2, recoverable) and carry the typed contract fields so an agent can
+// distinguish "fix your input and retry" from "the tool died".
+test("validateRunId rejects malformed run ids with a typed invalid_usage error", () => {
+  let thrown;
+  try {
+    validateRunId("__does_not_exist__");
+  } catch (error) {
+    thrown = error;
+  }
+  assert.ok(thrown instanceof CliError, "expected a CliError");
+  const failure = classifyCliError(thrown);
+  assert.equal(failure.code, "invalid_usage");
+  assert.equal(failure.exitCode, 2);
+  assert.equal(failure.recoverable, true);
+  assert.equal(failure.type, "validation");
+  assert.equal(failure.subtype, "invalid_run_id");
+  assert.equal(failure.param, "--run-id");
+  assert.equal(failure.retryable, false);
+  assert.match(thrown.message, /Invalid runId/);
+});
+
+test("validateRunId accepts a well-formed run id unchanged", () => {
+  assert.equal(validateRunId("ghostrun"), "ghostrun");
+});
+
+test("profilePath rejects malformed profile names with a typed invalid_usage error", () => {
+  let thrown;
+  try {
+    profilePath("Bad Profile!");
+  } catch (error) {
+    thrown = error;
+  }
+  assert.ok(thrown instanceof CliError, "expected a CliError");
+  const failure = classifyCliError(thrown);
+  assert.equal(failure.code, "invalid_usage");
+  assert.equal(failure.exitCode, 2);
+  assert.equal(failure.param, "--profile-name");
+  assert.equal(failure.subtype, "invalid_profile_name");
 });

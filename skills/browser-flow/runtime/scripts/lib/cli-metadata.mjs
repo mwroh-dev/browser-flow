@@ -5,6 +5,12 @@ export const SUPPORT_SCOPE = {
   description: "Supported target: macOS happy path. Windows/Linux behavior is best-effort defensive compatibility, not a release support guarantee."
 };
 
+export const RISK_TAXONOMY = ["read", "write", "high-risk-write", "interactive"];
+export const LAYER_TAXONOMY = ["setup", "pipeline", "reuse", "review", "promotion", "recovery", "raw-browser"];
+
+const RISK_VALUES = new Set(RISK_TAXONOMY);
+const LAYER_VALUES = new Set(LAYER_TAXONOMY);
+
 export const COMMAND_GROUPS = [
   { id: "setup", title: "Setup / diagnostics" },
   { id: "capture", title: "Capture" },
@@ -28,8 +34,18 @@ export const COMMAND_GROUPS = [
  * }} CommandOption
  *
  * @typedef {{
+ *   role: "server" | "client",
+ *   counterpart: string,
+ *   portSource: string,
+ *   commands: string[],
+ *   notes: string[]
+ * }} SplitFlowMetadata
+ *
+ * @typedef {{
  *   name: string,
  *   group: string,
+ *   risk: "read" | "write" | "high-risk-write" | "interactive",
+ *   layer: "setup" | "pipeline" | "reuse" | "review" | "promotion" | "recovery" | "raw-browser",
  *   classification: "public" | "advanced" | "internal",
  *   description: string,
  *   usage: string,
@@ -44,6 +60,7 @@ export const COMMAND_GROUPS = [
  *   writtenArtifacts: string[],
  *   registryMutation: "none" | "conditional-upsert" | "required-upsert",
  *   safetyImplications: string[],
+ *   splitFlow?: SplitFlowMetadata,
  *   mutating: boolean
  * }} CommandMetadata
  */
@@ -53,6 +70,8 @@ export const COMMANDS = [
   command({
     name: "help",
     group: "setup",
+    risk: "read",
+    layer: "setup",
     classification: "public",
     description: "Print top-level, topic, or command help.",
     usage: "browser-flow help [workflows|examples|safety|artifacts|exit-codes|<command>]",
@@ -67,6 +86,8 @@ export const COMMANDS = [
   command({
     name: "schema",
     group: "setup",
+    risk: "read",
+    layer: "setup",
     classification: "public",
     description: "Print the machine-readable browser-flow CLI schema.",
     usage: "browser-flow schema [command <name>]",
@@ -81,6 +102,8 @@ export const COMMANDS = [
   command({
     name: "capabilities",
     group: "setup",
+    risk: "read",
+    layer: "setup",
     classification: "public",
     description: "Print compact agent-readable CLI capabilities.",
     usage: "browser-flow capabilities",
@@ -95,6 +118,8 @@ export const COMMANDS = [
   command({
     name: "doctor",
     group: "setup",
+    risk: "write",
+    layer: "setup",
     classification: "public",
     description: "Report page-node staleness and local runtime preflight readiness.",
     usage: "browser-flow doctor [--page-key <pageKey>] [--chrome-path <path>]",
@@ -104,17 +129,20 @@ export const COMMANDS = [
       { name: "--page-key", value: "pageKey", required: false, type: "string", values: [], description: "--page-key <pageKey>" },
     ],
     examples: ["browser-flow doctor", "browser-flow doctor --page-key synthetic/synthetic/result"],
-    sideEffects: ["Read-only diagnostic; creates bootstrap directories if missing."],
+    sideEffects: ["Creates bootstrap directories if missing while checking local runtime readiness."],
     artifacts: ["Reads knowledge/pages/<pageKey>/meta.json, snapshots/*.html.gz, registry metadata, and runtime dependency paths."],
     related: ["prepare", "analyze", "help artifacts"],
     defaults: { pageKey: "all page nodes", chromePath: "BROWSER_FLOW_CHROME_PATH or platform default" },
     readArtifacts: ["knowledge/pages/<pageKey>/meta.json", "knowledge/pages/<pageKey>/snapshots/*.html.gz", "knowledge/registry/workflows.json", "node_modules/*", "scripts/security/*"],
     writtenArtifacts: ["bootstrap directories when missing"],
-    safetyImplications: ["Read-only staleness signal; does not verify or promote workflows."]
+    mutating: true,
+    safetyImplications: ["Bootstrap directory creation does not verify or promote workflows."]
   }),
   command({
     name: "serve-browser",
     group: "setup",
+    risk: "interactive",
+    layer: "raw-browser",
     classification: "advanced",
     description: "Launch a visible Chrome profile for human login and later attach verification.",
     usage: "browser-flow serve-browser [--run-id <id>] [--port <port>] [--url <site>]",
@@ -134,11 +162,27 @@ export const COMMANDS = [
     defaults: { port: 9222, profile: "profiles/attach/<runId-or-default>" },
     readArtifacts: ["artifacts/runs/<id>/workflow.json when --url is omitted"],
     writtenArtifacts: ["profiles/attach/<runId-or-default>/"],
-    safetyImplications: ["Authentication remains in the live browser/profile and is not persisted to workflow artifacts."]
+    safetyImplications: ["Authentication remains in the live browser/profile and is not persisted to workflow artifacts."],
+    splitFlow: {
+      role: "server",
+      counterpart: "verify",
+      portSource: "Use a claimed CDP registry port for named work; 9222 is only for generic one-off attach sessions.",
+      commands: [
+        "node ~/.cdp-port-registry.mjs claim --name <project-task> --owner codex --kind cdp",
+        "browser-flow serve-browser --run-id <id> --port <claimed-port>",
+        "browser-flow verify --run-id <id> --attach <claimed-port>"
+      ],
+      notes: [
+        "The browser remains open for human login or manual state setup.",
+        "The attach verifier must use the same claimed port and must not construct browser URLs directly."
+      ]
+    }
   }),
   command({
     name: "completion",
     group: "setup",
+    risk: "read",
+    layer: "setup",
     classification: "public",
     description: "Print static shell completion for browser-flow commands and common flags.",
     usage: "browser-flow completion <bash|zsh|fish>",
@@ -158,8 +202,37 @@ export const COMMANDS = [
     safetyImplications: ["Completion is static and does not inspect browser state or artifacts."]
   }),
   command({
+    name: "status",
+    group: "setup",
+    risk: "read",
+    layer: "setup",
+    classification: "public",
+    description: "Report whether a run can truthfully claim success from authoritative artifacts.",
+    usage: "browser-flow status --run-id <id>",
+    options: [
+      { name: "--run-id", value: "id", required: true, type: "string", values: [], description: "--run-id <id>" },
+    ],
+    examples: ["browser-flow status --run-id demo"],
+    sideEffects: ["Read-only; reads run artifacts and writes JSON status to stdout."],
+    artifacts: ["Reads workflow.json, reports/verification.json, reports/security.json, reports/verification-summary.json, and reports/data-result.json when present."],
+    related: ["verify", "promote", "schema", "capabilities"],
+    output: "json",
+    readArtifacts: [
+      "artifacts/runs/<id>/analysis/workflow.json",
+      "artifacts/runs/<id>/reports/verification.json",
+      "artifacts/runs/<id>/reports/security.json",
+      "artifacts/runs/<id>/reports/verification-summary.json",
+      "artifacts/runs/<id>/reports/data-result.json"
+    ],
+    writtenArtifacts: ["None."],
+    mutating: false,
+    safetyImplications: ["Success is claimable only from parsed verification/security artifacts with passed replay, complete path, full step execution, and security ok:true."]
+  }),
+  command({
     name: "prepare",
     group: "capture",
+    risk: "write",
+    layer: "pipeline",
     classification: "public",
     description: "Create a capture session with an isolated Chrome debug profile.",
     usage: "browser-flow prepare [--run-id <id>] [--fixture <fixture>] [--start-url <url>] [--unmasked] [--snapshot-dom] [--profile-name <name>] [--headless]",
@@ -189,6 +262,8 @@ export const COMMANDS = [
   command({
     name: "done",
     group: "capture",
+    risk: "write",
+    layer: "pipeline",
     classification: "public",
     description: "End capture and persist sanitized artifacts from the observer daemon.",
     usage: "browser-flow done --run-id <id> [--capture-screenshot final]",
@@ -207,6 +282,8 @@ export const COMMANDS = [
   command({
     name: "replay",
     group: "capture",
+    risk: "write",
+    layer: "pipeline",
     classification: "advanced",
     description: "Re-run sanitize and security scan on a captured raw event log without opening a browser.",
     usage: "browser-flow replay --run-id <id>",
@@ -224,6 +301,8 @@ export const COMMANDS = [
   command({
     name: "analyze",
     group: "pipeline",
+    risk: "write",
+    layer: "pipeline",
     classification: "public",
     description: "Compile sanitized capture artifacts into workflow, path, recipe, and analysis outputs.",
     usage: "browser-flow analyze --run-id <id>",
@@ -241,6 +320,8 @@ export const COMMANDS = [
   command({
     name: "generate",
     group: "pipeline",
+    risk: "write",
+    layer: "pipeline",
     classification: "public",
     description: "Generate a runnable CDP-direct runner from workflow.json.",
     usage: "browser-flow generate --run-id <id>",
@@ -259,6 +340,8 @@ export const COMMANDS = [
   command({
     name: "verify",
     group: "pipeline",
+    risk: "write",
+    layer: "pipeline",
     classification: "public",
     description: "Replay the generated workflow and enforce truthfulness gates [--summary] [--screenshots off|final|steps|both].",
     usage: "browser-flow verify --run-id <id> [--headless] [--summary] [--screenshots off|final|steps|both] [--first|--repeat] [--attach <port>]",
@@ -283,11 +366,27 @@ export const COMMANDS = [
     readArtifacts: ["artifacts/runs/<id>/workflow.json", "artifacts/runs/<id>/generated/runner.mjs"],
     writtenArtifacts: ["artifacts/runs/<id>/reports/verification.json", "artifacts/runs/<id>/reports/security.json", "state-journal.jsonl", "optional screenshots", "knowledge/registry/workflows.json when gates allow"],
     registryMutation: "conditional-upsert",
-    safetyImplications: ["Do not declare success unless verification.json and security.json are both green."]
+    safetyImplications: ["Do not declare success unless verification.json and security.json are both green."],
+    splitFlow: {
+      role: "client",
+      counterpart: "serve-browser",
+      portSource: "Use the same claimed CDP registry port that launched serve-browser.",
+      commands: [
+        "node ~/.cdp-port-registry.mjs claim --name <project-task> --owner codex --kind cdp",
+        "browser-flow serve-browser --run-id <id> --port <claimed-port>",
+        "browser-flow verify --run-id <id> --attach <claimed-port>"
+      ],
+      notes: [
+        "--attach consumes an already-open browser profile; it does not prove success without authoritative verification and security artifacts.",
+        "Named attach flows must avoid hardcoded 9222 and release the registry claim when the workflow is no longer active."
+      ]
+    }
   }),
   command({
     name: "vars",
     group: "reuse",
+    risk: "write",
+    layer: "reuse",
     classification: "advanced",
     description: "Inspect, confirm, resume, or interactively resolve variable-extraction task state.",
     usage: "browser-flow vars --run-id <id> [--confirm | --interactive | --resume]",
@@ -308,6 +407,8 @@ export const COMMANDS = [
   command({
     name: "run",
     group: "reuse",
+    risk: "write",
+    layer: "reuse",
     classification: "public",
     description: "Bind workflow inputs and emit a new derived run with its own generated runner.",
     usage: "browser-flow run --run-id <id> [--bind input.name=value ...] [--dry-run]",
@@ -327,6 +428,8 @@ export const COMMANDS = [
   command({
     name: "spec",
     group: "reuse",
+    risk: "write",
+    layer: "reuse",
     classification: "advanced",
     description: "Gather verifiable-spec answers for missing workflow verification context.",
     usage: "browser-flow spec --run-id <id> [--request <text>]",
@@ -346,6 +449,8 @@ export const COMMANDS = [
   command({
     name: "extract",
     group: "extract",
+    risk: "write",
+    layer: "reuse",
     classification: "public",
     description: "Emit/apply scrape setup or reuse a durable extractor config for page data.",
     usage: "browser-flow extract --run-id <id> --step <n> [--schema <path> | --apply <scrape-result.json> | --reuse [--paged]] [--data-mode extract|mixed]",
@@ -375,6 +480,8 @@ export const COMMANDS = [
   command({
     name: "extract-heal",
     group: "extract",
+    risk: "write",
+    layer: "reuse",
     classification: "advanced",
     description: "Emit or apply a repaired extractor config after extraction drift.",
     usage: "browser-flow extract-heal --run-id <id> [--apply <extract-heal-result.json>]",
@@ -393,6 +500,8 @@ export const COMMANDS = [
   command({
     name: "review-noise",
     group: "review",
+    risk: "write",
+    layer: "review",
     classification: "advanced",
     description: "Brief/apply ambiguous capture-noise review.",
     usage: "browser-flow review-noise --run-id <id> [--apply <capture-noise-result.json>]",
@@ -411,6 +520,8 @@ export const COMMANDS = [
   command({
     name: "review-locator-intent",
     group: "review",
+    risk: "write",
+    layer: "review",
     classification: "advanced",
     description: "Brief/apply same-name semantic locator intent review.",
     usage: "browser-flow review-locator-intent --run-id <id> [--apply <locator-intent-result.json>]",
@@ -432,6 +543,8 @@ export const COMMANDS = [
   command({
     name: "review-route-intent",
     group: "review",
+    risk: "write",
+    layer: "review",
     classification: "advanced",
     description: "Brief/apply state/intent route review.",
     usage: "browser-flow review-route-intent --run-id <id> [--apply <route-intent-result.json>]",
@@ -450,6 +563,8 @@ export const COMMANDS = [
   command({
     name: "promote",
     group: "promote",
+    risk: "high-risk-write",
+    layer: "promotion",
     classification: "public",
     description: "Save a replay-verified external workflow after explicit approval.",
     usage: "browser-flow promote --run-id <id> --scope external --origins <csv> --auth-mode <mode> --profile-mode <mode> --privacy-level <level> --screenshots off|allowed --data-mode route|extract|mixed [--dry-run]",
@@ -478,6 +593,8 @@ export const COMMANDS = [
   command({
     name: "compose",
     group: "compose",
+    risk: "write",
+    layer: "reuse",
     classification: "public",
     description: "Compose a primary workflow request into episodic compose artifacts.",
     usage: "browser-flow compose --run-id <id> --request <task> [--dry-run]",
@@ -497,6 +614,8 @@ export const COMMANDS = [
   command({
     name: "teardown",
     group: "cleanup",
+    risk: "write",
+    layer: "recovery",
     classification: "advanced",
     description: "Link a teardown into the main workflow from a recorded cleanup or selector search.",
     usage: "browser-flow teardown --run-id <id> (--record <cleanupRunId> | --search [--intent <text>] [--page <pageKey>])",
@@ -521,6 +640,8 @@ export const COMMANDS = [
   command({
     name: "cleanup",
     group: "cleanup",
+    risk: "high-risk-write",
+    layer: "recovery",
     classification: "advanced",
     description: "Delete dangling artifacts from a held or aborted run through its teardown recipe.",
     usage: "browser-flow cleanup --run-id <id> [--dry-run]",
@@ -539,6 +660,8 @@ export const COMMANDS = [
   command({
     name: "heal",
     group: "cleanup",
+    risk: "write",
+    layer: "recovery",
     classification: "advanced",
     description: "Apply a heal-result to a held run, clean up, and perform one bounded re-run.",
     usage: "browser-flow heal --run-id <id> [--apply <heal-result.json>] [--headless|--no-headless]",
@@ -559,6 +682,8 @@ export const COMMANDS = [
   command({
     name: "score",
     group: "cleanup",
+    risk: "write",
+    layer: "recovery",
     classification: "advanced",
     description: "Apply scoring-agent weight overrides after an ambiguous locator drift hold.",
     usage: "browser-flow score --run-id <id> [--apply <scoring-result.json>] [--headless|--no-headless]",
@@ -579,6 +704,8 @@ export const COMMANDS = [
   command({
     name: "scope",
     group: "cleanup",
+    risk: "write",
+    layer: "recovery",
     classification: "advanced",
     description: "Emit/apply scope-agent identity regions for signal-poor locators before verification.",
     usage: "browser-flow scope --run-id <id> [--apply <scope-result.json>]",
@@ -597,6 +724,8 @@ export const COMMANDS = [
   command({
     name: "reveal",
     group: "cleanup",
+    risk: "write",
+    layer: "recovery",
     classification: "advanced",
     description: "Emit/apply stateful-affordance reveal semantics for ambiguous reveal controls.",
     usage: "browser-flow reveal --run-id <id> [--apply <reveal-result.json>]",
@@ -615,6 +744,8 @@ export const COMMANDS = [
   command({
     name: "explore",
     group: "cleanup",
+    risk: "write",
+    layer: "recovery",
     classification: "advanced",
     description: "Discover a fixture page's navigable graph with read-only bounded BFS.",
     usage: "browser-flow explore --fixture <fixture> [--depth <n>] [--headless]",
@@ -720,12 +851,11 @@ JSON errors:
 };
 
 /**
- * @param {Omit<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating"> & Partial<Pick<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "mutating">>} input
+ * @param {Omit<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "splitFlow" | "mutating"> & Partial<Pick<CommandMetadata, "options" | "examples" | "sideEffects" | "artifacts" | "related" | "output" | "defaults" | "readArtifacts" | "writtenArtifacts" | "registryMutation" | "safetyImplications" | "splitFlow" | "mutating">>} input
  * @returns {CommandMetadata}
  */
 function command(input) {
-  const readOnly = input.sideEffects?.every((item) => /^Read-only\b/i.test(item)) ?? false;
-  return {
+  const metadata = {
     options: [],
     examples: [],
     sideEffects: ["None."],
@@ -737,9 +867,12 @@ function command(input) {
     writtenArtifacts: [],
     registryMutation: "none",
     safetyImplications: [],
-    mutating: !readOnly,
-    ...input
+    ...input,
+    mutating: input.mutating ?? input.risk !== "read"
   };
+  if (!RISK_VALUES.has(metadata.risk)) throw new Error(`Unknown CLI risk for ${metadata.name}: ${metadata.risk}`);
+  if (!LAYER_VALUES.has(metadata.layer)) throw new Error(`Unknown CLI layer for ${metadata.name}: ${metadata.layer}`);
+  return metadata;
 }
 
 /**
@@ -795,6 +928,8 @@ export function renderCommandHelp(name) {
     "",
     `Description: ${entry.description}`,
     `Classification: ${entry.classification}`,
+    `Risk: ${entry.risk}`,
+    `Layer: ${entry.layer}`,
     `Output: ${entry.output}`,
     "",
     "Usage:",
@@ -816,7 +951,18 @@ export function renderCommandHelp(name) {
     formatList(entry.artifacts),
     "",
     "Related commands:",
-    formatList(entry.related)
+    formatList(entry.related),
+    ...(entry.splitFlow ? [
+      "",
+      "Split-flow browser attach:",
+      `  Role: ${entry.splitFlow.role}`,
+      `  Counterpart: ${entry.splitFlow.counterpart}`,
+      `  Port source: ${entry.splitFlow.portSource}`,
+      "  Commands:",
+      formatList(entry.splitFlow.commands),
+      "  Notes:",
+      formatList(entry.splitFlow.notes)
+    ] : [])
   ].join("\n");
 }
 
@@ -841,6 +987,8 @@ export function buildCapabilities() {
     commands: COMMANDS.map((entry) => ({
       name: entry.name,
       group: entry.group,
+      risk: entry.risk,
+      layer: entry.layer,
       classification: entry.classification,
       description: entry.description,
       options: entry.options,
@@ -848,6 +996,7 @@ export function buildCapabilities() {
       mutating: entry.mutating,
       registryMutation: entry.registryMutation,
       safetyImplications: entry.safetyImplications,
+      ...(entry.splitFlow ? { splitFlow: entry.splitFlow } : {}),
       relatedCommands: entry.related
     }))
   };
@@ -890,6 +1039,8 @@ function commandSchema(entry) {
     name: entry.name,
     description: entry.description,
     group: entry.group,
+    risk: entry.risk,
+    layer: entry.layer,
     classification: entry.classification,
     usage: entry.usage,
     options: entry.options,
@@ -901,6 +1052,7 @@ function commandSchema(entry) {
     writtenArtifacts: entry.writtenArtifacts,
     registryMutation: entry.registryMutation,
     safetyImplications: entry.safetyImplications,
+    ...(entry.splitFlow ? { splitFlow: entry.splitFlow } : {}),
     relatedCommands: entry.related
   };
 }

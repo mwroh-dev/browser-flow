@@ -9,7 +9,8 @@
 // - hash-only diff (not semantic HTML diff) for v1
 // - first-vs-last comparison only (not every-adjacent-pair)
 // - decompress before hashing (sha256 of gunzipped bytes)
-// - read-only: doctor surfaces signal, does not mutate state
+// - diagnostic: doctor surfaces signal and may create bootstrap directories
+//   via the CLI pre-run hook before it inspects local state
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
