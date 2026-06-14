@@ -34,11 +34,14 @@ test("classifyCliError does not regex-classify plain object message values", () 
 test("CliError constructor ignores nullish and non-object metadata", () => {
   const nullMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], null);
   const scalarMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], "not metadata");
+  const arrayMetadata = new CliError("invalid_usage", "bad input", ["browser-flow help"], ["not", "metadata"]);
 
   assert.equal(nullMetadata.type, "validation");
   assert.equal(nullMetadata.subtype, undefined);
   assert.equal(scalarMetadata.type, "validation");
   assert.equal(scalarMetadata.subtype, undefined);
+  assert.equal(arrayMetadata.type, "validation");
+  assert.equal(arrayMetadata.subtype, undefined);
 });
 
 test("filesystem stat helpers tolerate races and vanished entries", () => {
@@ -48,9 +51,19 @@ test("filesystem stat helpers tolerate races and vanished entries", () => {
   const linter = readFileSync(resolve(runtimeRoot, "scripts/lint.mjs"), "utf8");
 
   assert.match(statusReport, /function artifactStatus\(path\) \{[\s\S]*try \{[\s\S]*statSync\(path\)[\s\S]*catch/s);
+  assert.doesNotMatch(statusReport, /function artifactStatus\(path\) \{[\s\S]*existsSync\(path\)/s);
   assert.match(fsHelper, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);
   assert.match(testRunner, /try \{[\s\S]*statSync\(abs\)[\s\S]*catch/s);
   assert.match(linter, /try \{[\s\S]*statSync\(fullPath\)[\s\S]*catch/s);
+});
+
+test("status report checks artifact failures before semantic content failures", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts/lib/status-report.mjs"), "utf8");
+
+  assert.match(source, /const artifactFailure = firstFailure\(\[/);
+  assert.match(source, /let lastFailure = artifactFailure;/);
+  assert.match(source, /if \(lastFailure === undefined\) \{/);
+  assert.doesNotMatch(source, /const lastFailure = firstFailure\(\[/);
 });
 
 test("doctor npm version check uses shell execution on Windows", () => {

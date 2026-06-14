@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { getRunPaths } from "./config.mjs";
 import { readJson } from "./fs.mjs";
@@ -50,41 +50,46 @@ export function buildStatusReport(runId) {
     ? verificationDoc.stepCount
     : undefined;
 
-  const lastFailure = firstFailure([
+  const artifactFailure = firstFailure([
     requiredArtifactFailure("workflow", workflow, ARTIFACT_FILENAMES.workflow),
     requiredArtifactFailure("verification", verification, ARTIFACT_FILENAMES.verification),
     requiredArtifactFailure("security", security, ARTIFACT_FILENAMES.security),
     requiredArtifactFailure("summary", summary, ARTIFACT_FILENAMES.summary),
-    optionalArtifactFailure("dataResult", dataResult, ARTIFACT_FILENAMES.dataResult),
-    verificationDoc?.replayOutcome === "passed"
-      ? null
-      : {
-          code: "replay_not_passed",
-          message: `verification replayOutcome is ${JSON.stringify(verificationDoc?.replayOutcome ?? null)}; expected "passed".`,
-          artifact: "verification"
-        },
-    verificationDoc?.pathComplete === true
-      ? null
-      : {
-          code: "path_incomplete",
-          message: "verification pathComplete is not true.",
-          artifact: "verification"
-        },
-    executedSteps !== undefined && stepCount !== undefined && executedSteps === stepCount
-      ? null
-      : {
-          code: "executed_steps_mismatch",
-          message: `verification executedSteps length ${executedSteps ?? "unknown"} does not match stepCount ${stepCount ?? "unknown"}.`,
-          artifact: "verification"
-        },
-    securityDoc?.ok === true
-      ? null
-      : {
-          code: "security_not_ok",
-          message: "security ok is not true.",
-          artifact: "security"
-        }
+    optionalArtifactFailure("dataResult", dataResult, ARTIFACT_FILENAMES.dataResult)
   ]);
+  let lastFailure = artifactFailure;
+  if (lastFailure === undefined) {
+    lastFailure = firstFailure([
+      verificationDoc?.replayOutcome === "passed"
+        ? null
+        : {
+            code: "replay_not_passed",
+            message: `verification replayOutcome is ${JSON.stringify(verificationDoc?.replayOutcome ?? null)}; expected "passed".`,
+            artifact: "verification"
+          },
+      verificationDoc?.pathComplete === true
+        ? null
+        : {
+            code: "path_incomplete",
+            message: "verification pathComplete is not true.",
+            artifact: "verification"
+          },
+      executedSteps !== undefined && stepCount !== undefined && executedSteps === stepCount
+        ? null
+        : {
+            code: "executed_steps_mismatch",
+            message: `verification executedSteps length ${executedSteps ?? "unknown"} does not match stepCount ${stepCount ?? "unknown"}.`,
+            artifact: "verification"
+          },
+      securityDoc?.ok === true
+        ? null
+        : {
+            code: "security_not_ok",
+            message: "security ok is not true.",
+            artifact: "security"
+          }
+    ]);
+  }
 
   return {
     ok: true,
@@ -149,7 +154,6 @@ function readOptionalJson(path) {
  */
 function artifactStatus(path) {
   try {
-    if (!existsSync(path)) return { path, exists: false };
     const stats = statSync(path);
     return {
       path,
