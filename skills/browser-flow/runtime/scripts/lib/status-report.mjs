@@ -3,6 +3,14 @@ import { resolve } from "node:path";
 import { getRunPaths } from "./config.mjs";
 import { readJson } from "./fs.mjs";
 
+const ARTIFACT_FILENAMES = {
+  workflow: "workflow.json",
+  verification: "verification.json",
+  security: "security.json",
+  summary: "verification-summary.json",
+  dataResult: "data-result.json"
+};
+
 /**
  * @typedef {{
  *   path: string,
@@ -43,11 +51,11 @@ export function buildStatusReport(runId) {
     : undefined;
 
   const lastFailure = firstFailure([
-    requiredArtifactFailure("workflow", workflow),
-    requiredArtifactFailure("verification", verification),
-    requiredArtifactFailure("security", security),
-    requiredArtifactFailure("summary", summary),
-    optionalArtifactFailure("dataResult", dataResult),
+    requiredArtifactFailure("workflow", workflow, ARTIFACT_FILENAMES.workflow),
+    requiredArtifactFailure("verification", verification, ARTIFACT_FILENAMES.verification),
+    requiredArtifactFailure("security", security, ARTIFACT_FILENAMES.security),
+    requiredArtifactFailure("summary", summary, ARTIFACT_FILENAMES.summary),
+    optionalArtifactFailure("dataResult", dataResult, ARTIFACT_FILENAMES.dataResult),
     verificationDoc?.replayOutcome === "passed"
       ? null
       : {
@@ -155,27 +163,36 @@ function artifactStatus(path) {
  * @returns {Record<string, any> | undefined}
  */
 function asRecord(value) {
-  return value && typeof value === "object" && !Array.isArray(value)
+  return isPlainObject(value)
     ? /** @type {Record<string, any>} */ (value)
     : undefined;
 }
 
 /**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+/**
  * @param {string} name
  * @param {{ artifact: ArtifactStatus }} result
+ * @param {string} filename
  */
-function requiredArtifactFailure(name, result) {
+function requiredArtifactFailure(name, result, filename) {
   if (!result.artifact.exists) {
     return {
       code: `${name}_missing`,
-      message: `${name}.json is missing.`,
+      message: `${filename} is missing.`,
       artifact: name
     };
   }
   if (result.artifact.parseOk !== true) {
     return {
       code: `${name}_malformed`,
-      message: `${name}.json could not be parsed.`,
+      message: `${filename} could not be parsed.`,
       artifact: name
     };
   }
@@ -185,13 +202,14 @@ function requiredArtifactFailure(name, result) {
 /**
  * @param {string} name
  * @param {{ artifact: ArtifactStatus }} result
+ * @param {string} filename
  */
-function optionalArtifactFailure(name, result) {
+function optionalArtifactFailure(name, result, filename) {
   if (!result.artifact.exists) return null;
   if (result.artifact.parseOk !== true) {
     return {
       code: `${name}_malformed`,
-      message: `${name}.json could not be parsed.`,
+      message: `${filename} could not be parsed.`,
       artifact: name
     };
   }

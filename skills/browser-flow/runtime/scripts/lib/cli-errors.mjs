@@ -271,6 +271,7 @@ export function formatHumanCliError(failure) {
  * @param {CliFailure} failure
  */
 export function formatJsonCliError(failure) {
+  /** @type {Omit<CliFailure, 'exitCode'>} */
   const error = {
     code: failure.code,
     message: failure.message,

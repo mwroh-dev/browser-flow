@@ -14,7 +14,7 @@ const NOTICE_SEVERITIES = new Set(["info", "warning", "error"]);
  * @returns {result is Record<string, unknown>}
  */
 function isPlainObject(result) {
-  return result !== null && typeof result === "object" && !Array.isArray(result);
+  return result !== null && typeof result === "object" && Object.getPrototypeOf(result) === Object.prototype;
 }
 
 /**

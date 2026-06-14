@@ -177,6 +177,21 @@ test("structured notices are additive on json results", () => {
   });
 });
 
+test("structured notices wrap non-plain object results instead of spreading them", () => {
+  const value = new Date("2026-06-12T00:00:00.000Z");
+  const payload = withCliNotices(value, [
+    {
+      severity: "warning",
+      code: "needs_authoritative_status",
+      message: "Check browser-flow status before claiming success."
+    }
+  ]);
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.value, value);
+  assert.equal(payload.notices[0].code, "needs_authoritative_status");
+});
+
 test("status emits a notice when success cannot be claimed", () => {
   const status = runCli(["status", "--run-id", "missing-notice-run"]);
 
@@ -308,6 +323,7 @@ test("status refuses successClaimable when required verification summary is miss
   assert.equal(payload.ok, true);
   assert.equal(payload.successClaimable, false);
   assert.equal(payload.lastFailure.code, "summary_missing");
+  assert.equal(payload.lastFailure.message, "verification-summary.json is missing.");
   assert.equal(payload.lastFailure.artifact, "summary");
   assert.equal(payload.artifacts.summary.exists, false);
 });
@@ -340,6 +356,7 @@ test("status refuses successClaimable when required workflow is malformed", (t) 
   assert.equal(payload.ok, true);
   assert.equal(payload.successClaimable, false);
   assert.equal(payload.lastFailure.code, "workflow_malformed");
+  assert.equal(payload.lastFailure.message, "workflow.json could not be parsed.");
   assert.equal(payload.lastFailure.artifact, "workflow");
   assert.equal(payload.artifacts.workflow.parseOk, false);
 });
@@ -373,6 +390,7 @@ test("status refuses successClaimable when optional data result exists but is ma
   assert.equal(payload.ok, true);
   assert.equal(payload.successClaimable, false);
   assert.equal(payload.lastFailure.code, "dataResult_malformed");
+  assert.equal(payload.lastFailure.message, "data-result.json could not be parsed.");
   assert.equal(payload.lastFailure.artifact, "dataResult");
   assert.equal(payload.artifacts.dataResult.parseOk, false);
 });
@@ -456,6 +474,12 @@ test("typed cli errors omit absent optional json fields", () => {
   assert.equal("param" in payload.error, false);
   assert.equal("artifacts" in payload.error, false);
   assert.equal("retryable" in payload.error, false);
+});
+
+test("json cli error formatter keeps its mutable error object typed", () => {
+  const source = readFileSync(resolve(runtimeRoot, "scripts", "lib", "cli-errors.mjs"), "utf8");
+
+  assert.match(source, /@type \{Omit<CliFailure, 'exitCode'>\}[\s\S]*const error = \{/);
 });
 
 test("release cli smoke works without importing heavy command modules first", () => {
